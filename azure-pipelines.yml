@@ -1,0 +1,258 @@
+# Azure DevOps Pipeline YAML
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  GitHubRepoURL: 'https://github.com/iamgagantyagi/secureline'
+  GitHubRepoOwner: 'iamgagantyagi'
+  GitHubRepoName: 'secureline'
+  GitHubBranch: 'main'
+  ArtifactStorageAccount: 'yourazurestorageaccount'
+  ArtifactContainerName: 'securelineartifacts'
+
+stages:
+  - stage: Initialize
+    jobs:
+      - job: SourceAction
+        steps:
+          - checkout: self
+            clean: true
+            path: s/MyAppSourceArtifact
+          - script: echo "Source code has been checked out."
+            displayName: 'Check out source code'
+
+  - stage: SecretsScanner
+    dependsOn: Initialize
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Secret Scanning"
+              pip install trufflehog3
+            displayName: 'Install dependencies'
+          - script: |
+              echo "Started scanning code repositories for vulnerabilities related to secret keys."
+              trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
+              echo "Scanning completed."
+            displayName: 'Run Trufflehog3 Scan'
+          - script: |
+              az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Trufflehog3 Scan Results'
+
+  - stage: SourceCompositionAnalysis
+    dependsOn: SecretsScanner
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Source Composition Analysis"
+              wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
+              unzip dependency-check-7.4.0-release.zip
+              rm dependency-check-7.4.0-release.zip
+              chmod -R 775 dependency-check/bin/dependency-check.sh
+              export PATH=dependency-check/bin:$PATH
+            displayName: 'Install dependencies'
+          - script: |
+              echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"
+              dependency-check.sh -o './' -s './' -f 'ALL' --prettyPrint
+              echo "Scanning completed."
+            displayName: 'Run Dependency Check'
+          - script: |
+              az storage blob upload --file dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Dependency Check Results'
+
+  - stage: StaticApplicationSecurityTesting
+    dependsOn: SourceCompositionAnalysis
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Static Application Security Testing (SAST)"
+              wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+              unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+              mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+              rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
+              chmod -R 775 /opt/sonar-scanner
+            displayName: 'Install dependencies'
+          - script: |
+              echo "Started scanning for Static Application Security Testing (SAST)"
+              mvn sonar:sonar -Dsonar.host.url="http://sonarqube.example.com" -Dsonar.java.binaries="$HOME/webgoat/src/main/java" -Dsonar.token="your-sonarqube-token" -Dsonar.projectKey="securityproject"
+              echo "Scanning completed."
+            displayName: 'Run SonarQube Scan'
+          - script: |
+              az storage blob upload --file sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload SonarQube Scan Results'
+
+  - stage: ContainersConfigurationScan
+    dependsOn: StaticApplicationSecurityTesting
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Containers Configuration Scan"
+              curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+              export PATH=$PATH:$HOME/.kubescape/bin
+            displayName: 'Install dependencies'
+          - script: |
+              echo "Scanning YAML for application"
+              kubescape scan WebGoat/webgoat_K8S.yml --format junit --output K8S_config_scan.xml
+              echo "Scanning completed."
+            displayName: 'Run Kubescape Scan'
+          - script: |
+              az storage blob upload --file K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Kubescape Scan Results'
+
+  - stage: GenerateBuild
+    dependsOn: ContainersConfigurationScan
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing docker & mvnw"
+              sudo apt update -y
+              sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt update -y
+              sudo apt install docker-ce maven -y
+            displayName: 'Install dependencies'
+          - script: |
+              echo "Executing build commands"
+              cd WebGoat
+              git checkout main
+              sudo docker login --username your-docker-username --password your-docker-password
+              sudo ./mvnw clean install
+              sudo docker build -f Dockerfile . -t webgoat/webgoat
+              sudo docker tag webgoat/webgoat:latest your-docker-username/webgoat:latest
+              sudo docker push your-docker-username/webgoat:latest
+              echo "WebGoat Docker image pushed successfully on Docker Hub"
+            displayName: 'Build and Push Docker Image'
+
+  - stage: TrivyDockerContainerScan
+    dependsOn: GenerateBuild
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing Trivy"
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.17.2
+            displayName: 'Install Trivy'
+          - script: |
+              echo "Scanning Docker image"
+              trivy image -f json -o Trivy_result.json your-docker-username/webgoat:latest
+              echo "Scanning completed."
+            displayName: 'Run Trivy Scan'
+          - script: |
+              az storage blob upload --file Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Trivy Scan Results'
+
+  - stage: DeployApplication
+    dependsOn: TrivyDockerContainerScan
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing kubectl"
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              sudo chmod +x kubectl
+              sudo mv kubectl /usr/local/bin
+            displayName: 'Install kubectl'
+          - script: |
+              echo "Deploying Application on Kubernetes"
+              kubectl apply -f WebGoat/webgoat_K8S.yml
+              echo "Deployment completed."
+            displayName: 'Deploy Application'
+
+  - stage: DynamicApplicationSecurityTesting
+    dependsOn: DeployApplication
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Running ZAP docker container and scanning full Scan"
+              mkdir $(pwd)/zapmount
+              chmod -R 777 $(pwd)/zapmount
+              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://your-app-url -x zap_report || true
+              echo "Scanning completed."
+            displayName: 'Run ZAP Scan'
+          - script: |
+              az storage blob upload --file $(pwd)/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload ZAP Scan Results'
+
+  - stage: HostVulnerabilityAssessment
+    dependsOn: DynamicApplicationSecurityTesting
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Host Vulnerability Assessment"
+              sudo apt-add-repository ppa:ansible/ansible
+              sudo apt update -y
+              sudo apt install ansible -y
+              sudo apt-get install python3-dateutil python3-html2text -y
+              git clone https://github.com/prashantsakharkar/a4mation
+            displayName: 'Install dependencies'
+          - script: |
+              cd a4mation
+              pip install -r docs/requirements.txt
+              pip install pyOpenSSL==22.0.0
+              export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+              sudo ansible-playbook -i src/modules/cis_audit/environment/hosts src/modules/cis_audit/run_cis_tool.yml --verbose -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+              az storage blob upload-batch --source output_files/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Run Host Vulnerability Assessment and upload results'
+
+  - stage: CloudScan
+    dependsOn: HostVulnerabilityAssessment
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Cloud Scan"
+              sudo apt update -y
+              sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt update -y
+              sudo apt install docker-ce -y
+            displayName: 'Install dependencies'
+          - script: |
+              echo "Starting cloud scan"
+              mkdir -p $(pwd)/report
+              docker run --memory="2.5g" -v $(pwd)/reports:/app/reports -e AWS_ACCESS_KEY_ID=your-access-key -e AWS_SECRET_ACCESS_KEY=your-secret-access-key securityftw/cs-suite -env aws
+              az storage blob upload-batch --source reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Run Cloud Scan and upload results'
+
+  - stage: FinalResult
+    dependsOn: CloudScan
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Final Result"
+              sudo apt-get install python3-dateutil python3-html2text -y
+              git clone https://github.com/prashantsakharkar/a4mation
+              az storage blob download-batch --source $(ArtifactContainerName)/ --destination a4mation/ --account-name $(ArtifactStorageAccount)
+            displayName: 'Install dependencies and download artifacts'
+          - script: |
+              cd a4mation/src/modules/devsecops_tool_parser/
+              pip install -r ../../docs/requirements.txt
+              pip install pyOpenSSL==22.0.0
+              export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+              python3 run_parser.py -t "ZAP Scan" -p "../../../zap_report" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "CIS-Audit" -p "$(find ../../../HostVA/ -name 'CIS_*.json')" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "awscisaudit" -p "$(find ../../../AWS/aws_audit/*/ -type d -name final_report -exec test -e "{}/final_json" \; -print)/final_json" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "DependencyCheck Scan" -p "../../../dependency-check-report.xml" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "Kubescape Scanning" -p "../../../K8S_config_scan.xml" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "Kubescape Scanning" -p "../../../k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "Trufflehog3 Scan" -p "../../../truffelhog_output.json" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "Trivy Scanning" -p "../../../Trivy_result.json" -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "sonarqube" -u "http://sakharkar.in:30000" -k securityproject -b main -a your-sonarqube-token -o "consolidated_test_output.csv"
+              cd ../../../
+              az storage blob upload --file output_files/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
+              az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
+            displayName: 'Run Final Result Parser and upload results'
