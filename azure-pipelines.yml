@@ -8,11 +8,11 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  GitHubRepoURL: 'https://github.com/iamgagantyagi/secureline'
+  GitHubRepoURL: 'https://github.com/iamgagantyagi/secureline/WebGoat'
   GitHubRepoOwner: 'iamgagantyagi'
   GitHubRepoName: 'secureline'
   GitHubBranch: 'main'
-  ArtifactStorageAccount: 'yourazurestorageaccount'
+  ArtifactStorageAccount: 'securelinestorage'
   ArtifactContainerName: 'securelineartifacts'
 
 stages:
