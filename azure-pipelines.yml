@@ -5,12 +5,12 @@ trigger:
       - main
 
 pool:
-  vmImage: ubuntu-latest
+  name: 'SelfHostedPool' 
 
 variables:
-  GitHubRepoURL: 'https://github.com/iamgagantyagi/secureline/WebGoat'
+  GitHubRepoURL: 'https://github.com/iamgagantyagi/WebGoat'
   GitHubRepoOwner: 'iamgagantyagi'
-  GitHubRepoName: 'secureline'
+  GitHubRepoName: 'WebGoat'
   GitHubBranch: 'main'
   ArtifactStorageAccount: 'securelinestorage'
   ArtifactContainerName: 'securelineartifacts'
