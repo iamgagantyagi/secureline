@@ -1,5 +1,7 @@
 #!/bin/bash
 
+HOSTNAME="securelinedemo"
+
 # Create .kube directory and configure kubectl
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
@@ -12,6 +14,7 @@ az keyvault set-policy --name Securelinevault1 --spn 013ce2ba-1776-4665-8000-b84
 
 KEY_VAULT_NAME="Securelinevault1"
 
+
 # Fetch secrets from Azure Key Vault
 sonarqubepassword=$(az keyvault secret show --name sonarqubepassword --vault-name $KEY_VAULT_NAME --query value -o tsv)
 postgresqlUsername=$(az keyvault secret show --name postgresqlUsername --vault-name $KEY_VAULT_NAME --query value -o tsv)
@@ -23,6 +26,19 @@ defectdojoUIPassword=$(az keyvault secret show --name defectdojoUIPassword --vau
 defectdojodatabase=$(az keyvault secret show --name defectdojodatabase --vault-name $KEY_VAULT_NAME --query value -o tsv)
 rabbitmqpassword=$(az keyvault secret show --name rabbitmqpassword --vault-name $KEY_VAULT_NAME --query value -o tsv)
 defectdojodomain=$(az keyvault secret show --name defectdojodomain --vault-name $KEY_VAULT_NAME --query value -o tsv)
+pattoken=$(az keyvault secret show --name pattoken --vault-name $KEY_VAULT_NAME --query value -o tsv)
+
+# Install dependencies
+sudo apt update -y
+sudo apt install -y curl git
+
+# Install Azure DevOps self-hosted runner
+curl -s https://aka.ms/installazuredevops -o install.sh
+bash install.sh --unattended --url https://dev.azure.com/Afour-technology --pat $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
+
+# Start the runner
+sudo ./svc.sh install
+sudo ./svc.sh start
 
 # Download configuration files
 #wget https://raw.githubusercontent.com/prashantsakharkar/secureline/main/values.yaml -P /home/ubuntu

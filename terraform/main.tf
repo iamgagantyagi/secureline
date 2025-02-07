@@ -21,7 +21,7 @@ data "azurerm_network_security_group" "existing_nsg" {
 }
 
 data "azurerm_user_assigned_identity" "example" {
-  name                = "Secureline"
+  name                = var.azurerm_user_assigned_identity
   resource_group_name = data.azurerm_resource_group.existing_rg.name
 }
 

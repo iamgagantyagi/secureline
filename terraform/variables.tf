@@ -34,7 +34,7 @@ variable "subnet_name" {
 variable "vm_name" {
   description = "Name of the virtual machine"
   type        = string
-  default     = "SecureLineDemo"
+  default     = "securelinedemo"
 }
 
 variable "vm_size" {
@@ -67,29 +67,45 @@ variable "dns_zone" {
 }
 
 variable "client_id" {
-  description = "Size of the virtual machine"
+  description = "client id"
   type        = string
   default     = "f5e28e71-12d7-4b50-a739-51c144dab286"
 }
 
 variable "tenant_id" {
-  description = "Size of the virtual machine"
+  description = "tenant id"
   type        = string
   default     = "563161ec-473b-4181-a08e-186bb8ba4131"
 }
 
 variable "subscription_id" {
-  description = "Size of the virtual machine"
+  description = "subscription id"
   type        = string
   default     = "ec95ae66-f5f6-429b-b0f6-1212513218a9"
 }
 
 variable "client_secret" {
-  description = "Size of the virtual machine"
+  description = "client secret"
   type        = string
   default     = "J1A8Q~T6jP~8G8sekr939lwNN4EQW~1MIp3lxcGt"
 }
 
+variable "azurerm_user_assigned_identity" {
+  description = "user assigned identity"
+  type        = string
+  default     = "Secureline"
+}
 
+variable "storage_account_name" {
+  description = "Size of the virtual machine"
+  type        = string
+  default     = "securelinestorage"
+}
 
+variable "container_name" {
+  description = "container name"
+  type        = string
+  default     = "terraformstate"
+  
+}
 
