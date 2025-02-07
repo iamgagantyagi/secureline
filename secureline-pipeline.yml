@@ -5,7 +5,8 @@ trigger:
       - main
 
 pool:
-  name: 'SelfHostedPool' 
+  name: Default
+  demands: agent.name -equals securelinedemo
 
 variables:
   GitHubRepoURL: 'https://github.com/iamgagantyagi/WebGoat'
@@ -25,7 +26,7 @@ stages:
             path: s/MyAppSourceArtifact
           - script: echo "Source code has been checked out."
             displayName: 'Check out source code'
-
+        
   - stage: SecretsScanner
     dependsOn: Initialize
     jobs:
@@ -43,6 +44,28 @@ stages:
           - script: |
               az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trufflehog3 Scan Results'
+
+          - script: |
+              echo "Sending SonarQube security findings to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "tags=Secureline" \
+              -F "scan_type=Trufflehog3 Scan" \
+              -F "file=@truffelhog_output.json" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send Trufflehog3 Results to DefectDojo' 
 
   - stage: SourceCompositionAnalysis
     dependsOn: SecretsScanner
@@ -66,6 +89,30 @@ stages:
               az storage blob upload --file dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Dependency Check Results'
 
+          - script: |
+              echo "Sending SonarQube security findings to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "tags=Secureline" \
+              -F "scan_type=Dependency Check Scan" \
+              -F "file=@dependency-check-report.xml;type=text/xml" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send SCA result to DefectDojo'             
+        
+ 
+
   - stage: StaticApplicationSecurityTesting
     dependsOn: SourceCompositionAnalysis
     jobs:
@@ -79,11 +126,40 @@ stages:
               rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
               chmod -R 775 /opt/sonar-scanner
             displayName: 'Install dependencies'
+
+          - script: |
+              echo "Cloning the repository"
+              git clone https://$(GitHubUsername):$(GitHubToken)@$(GitHubURL) $HOME/webgoat
+            displayName: 'Clone Repository'
+
           - script: |
               echo "Started scanning for Static Application Security Testing (SAST)"
-              mvn sonar:sonar -Dsonar.host.url="http://sonarqube.example.com" -Dsonar.java.binaries="$HOME/webgoat/src/main/java" -Dsonar.token="your-sonarqube-token" -Dsonar.projectKey="securityproject"
+              cd $HOME/webgoat
+              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/webgoat/src/main/java" -Dsonar.token="$(SonarQubeToken)" -Dsonar.projectKey="securityproject"
               echo "Scanning completed."
             displayName: 'Run SonarQube Scan'
+
+          - script: |
+              echo "Sending SonarQube security findings to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "tags=Secureline" \
+              -F "scan_type=SonarQube API Import" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send SonarQube Results to DefectDojo'
+
           - script: |
               az storage blob upload --file sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload SonarQube Scan Results'
@@ -125,15 +201,15 @@ stages:
               echo "Executing build commands"
               cd WebGoat
               git checkout main
-              sudo docker login --username your-docker-username --password your-docker-password
+              sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
               sudo ./mvnw clean install
               sudo docker build -f Dockerfile . -t webgoat/webgoat
-              sudo docker tag webgoat/webgoat:latest your-docker-username/webgoat:latest
-              sudo docker push your-docker-username/webgoat:latest
+              sudo docker tag webgoat/webgoat:latest gtyagi017/webgoat:latest
+              sudo docker push gtyagi017/webgoat:latest
               echo "WebGoat Docker image pushed successfully on Docker Hub"
             displayName: 'Build and Push Docker Image'
 
-  - stage: TrivyDockerContainerScan
+  - stage: TrivyDockerImageScan
     dependsOn: GenerateBuild
     jobs:
       - job: BuildAction
@@ -144,7 +220,7 @@ stages:
             displayName: 'Install Trivy'
           - script: |
               echo "Scanning Docker image"
-              trivy image -f json -o Trivy_result.json your-docker-username/webgoat:latest
+              trivy image -f json -o Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Scan'
           - script: |
@@ -177,15 +253,59 @@ stages:
               echo "Running ZAP docker container and scanning full Scan"
               mkdir $(pwd)/zapmount
               chmod -R 777 $(pwd)/zapmount
-              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://your-app-url -x zap_report || true
+              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://secureline.in:30002/WebGoat -x zap_report || true
               echo "Scanning completed."
             displayName: 'Run ZAP Scan'
           - script: |
               az storage blob upload --file $(pwd)/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload ZAP Scan Results'
 
-  - stage: HostVulnerabilityAssessment
+          - script: |
+              echo "Sending zap report to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "product_name=Secureline" \
+              -F "tags=zap_report" \
+              -F "scan_type=ZAP Scan" \
+              -F "file=@$(pwd)/zapmount/zap_report" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send SonarQube Results to DefectDojo'
+
+  - stage: ContainerScan
     dependsOn: DynamicApplicationSecurityTesting
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing kubectl"
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              sudo chmod +x kubectl
+              sudo mv kubectl /usr/local/bin
+              echo "Installing Kubescape"
+              curl -s "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh" | /bin/bash
+              export PATH=$PATH:$HOME/.kubescape/bin
+            displayName: 'Install dependencies'
+          - script: |
+              echo "kubescape scanning application namespace"
+              kubescape scan --include-namespaces webgoat-namespace --format junit --output k8s_namespace_scan.xml
+              echo "Uploading Kubescape scan results to Azure Blob Storage"
+              az storage blob upload --file k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Run Container Scan and upload results'          
+
+  - stage: HostVulnerabilityAssessment
+    dependsOn: ContainerScan
     jobs:
       - job: BuildAction
         steps:
@@ -219,11 +339,12 @@ stages:
               echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
               sudo apt update -y
               sudo apt install docker-ce -y
+              sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
             displayName: 'Install dependencies'
           - script: |
               echo "Starting cloud scan"
               mkdir -p $(pwd)/report
-              docker run --memory="2.5g" -v $(pwd)/reports:/app/reports -e AWS_ACCESS_KEY_ID=your-access-key -e AWS_SECRET_ACCESS_KEY=your-secret-access-key securityftw/cs-suite -env aws
+              docker run --memory="2.5g" -v $(pwd)/reports:/app/reports securityftw/cs-suite -env aws
               az storage blob upload-batch --source reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'
 
@@ -251,7 +372,7 @@ stages:
               python3 run_parser.py -t "Kubescape Scanning" -p "../../../k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
               python3 run_parser.py -t "Trufflehog3 Scan" -p "../../../truffelhog_output.json" -o "consolidated_test_output.csv"
               python3 run_parser.py -t "Trivy Scanning" -p "../../../Trivy_result.json" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "sonarqube" -u "http://sakharkar.in:30000" -k securityproject -b main -a your-sonarqube-token -o "consolidated_test_output.csv"
+              python3 run_parser.py -t "sonarqube" -u "http://secureline.in:30000" -k securityproject -b main -a your-sonarqube-token -o "consolidated_test_output.csv"
               cd ../../../
               az storage blob upload --file output_files/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
               az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
