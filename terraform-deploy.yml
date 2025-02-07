@@ -31,7 +31,7 @@ stages:
       - job: ApplyTerraform
         steps:
           - script: |
-              az login --identity --username 013ce2ba-1776-4665-8000-b84fcb4606f6
+              az login --identity 
               cd $(TerraformConfigPath)
               terraform init
             displayName: 'Apply Terraform Configuration'
