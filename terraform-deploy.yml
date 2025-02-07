@@ -33,6 +33,4 @@ stages:
           - script: |
               cd $(TerraformConfigPath)
               terraform init
-              # terraform plan -out=tfplan
-              # terraform  apply -auto-approve tfplan
             displayName: 'Apply Terraform Configuration'
