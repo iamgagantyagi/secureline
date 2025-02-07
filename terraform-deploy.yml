@@ -12,7 +12,7 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  TerraformConfigPath: 'terraform'
+  TerraformConfigPath: '/terraform'
 
 stages:
   - stage: Initialize
@@ -31,7 +31,8 @@ stages:
       - job: ApplyTerraform
         steps:
           - script: |
-              terraform init chdir=$(TerraformConfigPath)
-              # terraform chdir=$(TerraformConfigPath) plan
-              # terraform chdir=$(TerraformConfigPath) apply -auto-approve 
+              cd $(TerraformConfigPath)
+              terraform init
+              # terraform plan -out=tfplan
+              # terraform  apply -auto-approve tfplan
             displayName: 'Apply Terraform Configuration'
