@@ -12,7 +12,7 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  TerraformConfigPath: '/terraform'
+  TerraformConfigPath: 'terraform'
 
 stages:
   - stage: Initialize
