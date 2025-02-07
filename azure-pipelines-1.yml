@@ -4,14 +4,33 @@
 # https://aka.ms/yaml
 
 trigger:
-- main
+  branches:
+    include:
+      - main
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: ubuntu-latest
 
-steps:
-- script: terraform --version
-  displayName: 'Run a one-line script'
+variables:
+  TerraformConfigPath: '/terraform'
 
-- script: az --version 
-  displayName: 'Run a multi-line script'
+stages:
+  - stage: Initialize
+    jobs:
+      - job: SourceAction
+        steps:
+          - checkout: self
+            clean: true
+            path: s/MyAppSourceArtifact
+          - script: echo "Source code has been checked out."
+            displayName: 'Check out source code'
+
+  - stage: ApplyTerraform
+    dependsOn: Initialize
+    jobs:
+      - job: ApplyTerraform
+        steps:
+          - script: |
+              terraform init $(TerraformConfigPath)
+              terraform apply -auto-approve $(TerraformConfigPath)
+            displayName: 'Apply Terraform Configuration'
