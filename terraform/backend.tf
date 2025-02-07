@@ -1,9 +1,9 @@
 # backend.tf
 terraform {
   backend "azurerm" {
-    resource_group_name  = var.resource_group_name
-    storage_account_name = var.storage_account_name
-    container_name       = var.container_name
+    resource_group_name  = "SecureLine"
+    storage_account_name = "securlinestorage"
+    container_name       = "terraformstate"
     key                  = "terraform.tfstate"
   }
 }
