@@ -5,7 +5,7 @@ terraform {
     tenant_id       = "563161ec-473b-4181-a08e-186bb8ba4131"
     resource_group_name  = "Secureline"
     storage_account_name = "securelinestorage"
-    container_name       = "securelines-tfstate"
-    key                  = "terraformstate"
+    container_name       = "terraformstate"
+    key                  = "terraform.tfstate"
   }
 }
