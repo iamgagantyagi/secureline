@@ -12,7 +12,10 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  TerraformConfigPath: 'terraform'
+- group: secureline-secret
+- name: TerraformConfigPath
+  value: 'terraform'
+  
 
 stages:
   - stage: Initialize
