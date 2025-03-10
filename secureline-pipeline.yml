@@ -1,8 +1,15 @@
-# Azure DevOps Pipeline YAML
+# Azure DevOps Secureline Pipeline YAML
 trigger:
-  branches:
-    include:
-      - main
+  none
+
+resources:
+  pipelines:
+    - pipeline: terraformPipeline
+      source: terraform-deploy
+      trigger:
+        branches:
+          include:
+            - main
 
 pool:
   name: Default
@@ -228,7 +235,7 @@ stages:
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
-    dependsOn: TrivyDockerContainerScan
+    dependsOn: TrivyDockerImageScan
     jobs:
       - job: BuildAction
         steps:
