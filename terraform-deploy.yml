@@ -31,8 +31,10 @@ stages:
       - job: ApplyTerraform
         steps:
           - script: |
-              az login --service-principal -u "46cb691b-9355-4866-a961-c7f7fef761ce" -p "usA8Q~4TB.FY3zQM7fUfAjdXBrK5rcyxAXTUvaF5" --tenant "563161ec-473b-4181-a08e-186bb8ba4131"
-              az account set --subscription "ec95ae66-f5f6-429b-b0f6-1212513218a9"
+              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
+              az account set --subscription $(subscriptionid)
               cd $(TerraformConfigPath)
               terraform init
+              terraform plan -out=tfplan
+              terraform apply -auto-approve tfplan
             displayName: 'Apply Terraform Configuration'
