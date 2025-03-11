@@ -1,0 +1,39 @@
+# Terraform Cleanup Pipeline
+trigger: none  # Disable automatic triggers
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: secureline-secret
+- name: TerraformConfigPath
+  value: 'terraform'
+
+stages:
+  - stage: Initialize
+    jobs:
+      - job: SourceAction
+        steps:
+          - checkout: self
+            clean: true
+            path: s/MyAppSourceArtifact
+          - script: echo "Source code has been checked out."
+            displayName: 'Check out source code'
+
+  - stage: DestroyTerraform
+    dependsOn: Initialize
+    jobs:
+      - job: DestroyTerraform
+        steps:
+          - task: TerraformInstaller@0
+            inputs:
+              terraformVersion: 'latest'
+            displayName: 'Install Terraform'
+
+          - script: |
+              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
+              az account set --subscription $(subscriptionid)
+              cd $(TerraformConfigPath)
+              terraform init
+              terraform destroy -auto-approve
+            displayName: 'Destroy Terraform Resources'
