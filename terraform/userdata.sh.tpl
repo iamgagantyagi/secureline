@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Use the public IP address passed as a variable
-PUBLIC_IP=${public_ip}
+public_ip=${public_ip}
 
 echo "Set hostname"
 sudo hostnamectl set-hostname master
@@ -14,7 +14,7 @@ sudo sh -c 'echo "$(hostname -I | awk "{print \$1}") master" >> /etc/hosts'
 echo "########################################################################"
 
 echo "Add entry for securelinearecord.demodomain.co in /etc/hosts"
-sudo sh -c "echo \"${PUBLIC_IP} securelinearecord.demodomain.co\" >> /etc/hosts"
+sudo sh -c "echo \"${public_ip} securelinearecord.demodomain.co\" >> /etc/hosts"
 
 echo "Disable swap"
 sudo swapoff -a
