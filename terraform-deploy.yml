@@ -38,6 +38,18 @@ stages:
               az account set --subscription $(subscriptionid)
               cd $(TerraformConfigPath)
               terraform init
-              terraform plan -out=tfplan
-              terraform apply -auto-approve tfplan
+
+              # Run plan with detailed exit code
+              terraform plan -out=tfplan -detailed-exitcode
+
+              # Store the exit code
+              PLAN_EXIT_CODE=$?
+              
+              # Only apply if changes were detected (exit code 2)
+              if [ $PLAN_EXIT_CODE -eq 2 ]; then
+                echo "Changes detected, applying..."
+                terraform apply -auto-approve tfplan
+              else
+                echo "No changes detected. Skipping apply."
+              fi
             displayName: 'Apply Terraform Configuration'
