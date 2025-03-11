@@ -181,9 +181,15 @@ resource "null_resource" "vm_provisioner" {
     # #"az account set --subscription $ARM_SUBSCRIPTION_ID",
     # "echo 'Current subscription:'",
     # "az account show",
-    "sudo apt-get install dos2unix",
-    "dos2unix /home/ubuntu/setup.sh",
+    "echo 'Copying files to remote host...'",
+    "ls -l /home/ubuntu/",
+    "echo 'Files copied successfully.'",
+    "sudo apt-get install dos2unix", 
+    "dos2unix /home/ubuntu/dd.py",
+    "dos2unix /home/ubuntu/defectdojo.yaml",
+    "dos2unix /home/ubuntu/values.yaml",
     "chmod +x /home/ubuntu/setup.sh",
+    "dos2unix /home/ubuntu/setup.sh",
     "/home/ubuntu/setup.sh"
   ]
   }
