@@ -83,7 +83,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   #location              = data.azurerm_resource_group.existing_rg.location
   location              = var.location
   resource_group_name   = data.azurerm_resource_group.existing_rg.name
-  user_data             = base64encode(file("${path.module}/userdata.sh.tpl"))
+  user_data             = base64encode(file("${path.module}/userdata.sh.tpl", { public_ip = azurerm_public_ip.publicip.ip_address }))
   network_interface_ids = [azurerm_network_interface.nic.id]
   size                  = var.vm_size
 
