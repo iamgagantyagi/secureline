@@ -25,11 +25,6 @@ stages:
     jobs:
       - job: DestroyTerraform
         steps:
-          - task: TerraformInstaller@0
-            inputs:
-              terraformVersion: 'latest'
-            displayName: 'Install Terraform'
-
           - script: |
               az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
               az account set --subscription $(subscriptionid)
