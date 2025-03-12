@@ -31,8 +31,11 @@ stages:
           - checkout: self
             clean: true
             path: s/MyAppSourceArtifact
-          - script: echo "Source code has been checked out."
+          - script: echo "Source code has been checked out and az login"
+              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
+              az account set --subscription $(subscriptionid)
             displayName: 'Check out source code'
+
         
   - stage: SecretsScanner
     dependsOn: Initialize
