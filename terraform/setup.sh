@@ -33,12 +33,12 @@ sudo apt update -y
 sudo apt install -y curl git
 
 # Install Azure DevOps self-hosted runner
-curl -s https://aka.ms/installazuredevops -o install.sh
-bash install.sh --unattended --url https://dev.azure.com/Afour-technology --pat $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
+wget https://vstsagentpackage.azureedge.net/agent/4.252.0/vsts-agent-linux-x64-4.252.0.tar.gz
+tar zxvf vsts-agent-linux-x64-4.252.0.tar.gz
+bash config.sh --unattended --url https://dev.azure.com/Afour-technology --auth pat $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
 
 # Start the runner
-sudo ./svc.sh install
-sudo ./svc.sh start
+sudo ./run.sh
 
 # Download configuration files
 #wget https://raw.githubusercontent.com/prashantsakharkar/secureline/main/values.yaml -P /home/ubuntu

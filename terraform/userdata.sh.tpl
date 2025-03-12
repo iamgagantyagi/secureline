@@ -4,12 +4,12 @@
 public_ip=${public_ip}
 
 echo "Set hostname"
-sudo hostnamectl set-hostname master
+sudo hostnamectl set-hostname securelinedemo
 
 echo "########################################################################"
 
 echo  " Update /etc/hosts with local IP and new hostname"
-sudo sh -c 'echo "$(hostname -I | awk "{print \$1}") master" >> /etc/hosts'
+sudo sh -c 'echo "$(hostname -I | awk "{print \$1}") securelinedemo" >> /etc/hosts'
 
 echo "########################################################################"
 
