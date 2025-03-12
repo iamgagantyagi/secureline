@@ -56,10 +56,13 @@ stages:
               trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
               echo "Scanning completed."
             displayName: 'Run Trufflehog3 Scan'
-          - script: |
-              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
-              az account set --subscription $(subscriptionid)
-              az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trufflehog3 Scan Results'
 
           - script: |
