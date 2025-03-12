@@ -16,12 +16,19 @@ pool:
   demands: agent.name -equals securelinedemo
 
 variables:
-  GitHubRepoURL: 'https://github.com/iamgagantyagi/WebGoat'
-  GitHubRepoOwner: 'iamgagantyagi'
-  GitHubRepoName: 'WebGoat'
-  GitHubBranch: 'main'
-  ArtifactStorageAccount: 'securelinestorage'
-  ArtifactContainerName: 'securelineartifacts'
+- group: secureline-secret
+- name: GitHubRepoURL
+  value: 'https://github.com/iamgagantyagi/WebGoat'
+- name: GitHubRepoOwner
+  value: 'iamgagantyagi'
+- name: GitHubRepoName
+  value: 'WebGoat'
+- name: GitHubBranch
+  value: 'main'
+- name: ArtifactStorageAccount
+  value: 'securelinestorage'
+- name: ArtifactContainerName
+  value: 'securelineartifacts'
 
 stages:
   - stage: Initialize
