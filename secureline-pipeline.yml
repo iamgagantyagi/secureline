@@ -104,7 +104,6 @@ stages:
               chmod -R 775 dependency-check/bin/dependency-check.sh
               export PATH=dependency-check/bin:$PATH
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
-              cd /home/ubuntu/
               dependency-check.sh -o './' -s 'WebGoat' -f 'ALL' --prettyPrint
               echo "Scanning completed."
             displayName: 'Run Dependency Check'
@@ -115,7 +114,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload --file dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Dependency Check Results'
 
           - script: |
