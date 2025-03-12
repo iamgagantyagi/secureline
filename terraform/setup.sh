@@ -38,7 +38,8 @@ tar zxvf vsts-agent-linux-x64-4.252.0.tar.gz
 bash config.sh --unattended --url https://dev.azure.com/Afour-technology --auth pat --token $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
 
 # Start the runner
-bash run.sh
+sudo ./svc.sh install
+sudo ./svc.sh start
 
 # Download configuration files
 #wget https://raw.githubusercontent.com/prashantsakharkar/secureline/main/values.yaml -P /home/ubuntu
