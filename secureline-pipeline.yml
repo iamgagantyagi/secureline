@@ -104,6 +104,7 @@ stages:
               chmod -R 775 dependency-check/bin/dependency-check.sh
               export PATH=dependency-check/bin:$PATH
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
+              cd /home/ubuntu/
               dependency-check.sh -o './' -s 'WebGoat' -f 'ALL' --prettyPrint
               echo "Scanning completed."
             displayName: 'Run Dependency Check'
