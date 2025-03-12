@@ -335,7 +335,7 @@ mysql:
 postgresql:
   enabled: true
   image:
-    tag: 12
+    tag: 13
   auth:
     username: $defectdojopostgresqlUsername
     password: $defectdojopostgresqlPassword

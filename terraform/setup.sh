@@ -35,10 +35,10 @@ sudo apt install -y curl git
 # Install Azure DevOps self-hosted runner
 wget https://vstsagentpackage.azureedge.net/agent/4.252.0/vsts-agent-linux-x64-4.252.0.tar.gz
 tar zxvf vsts-agent-linux-x64-4.252.0.tar.gz
-bash config.sh --unattended --url https://dev.azure.com/Afour-technology --auth pat $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
+bash config.sh --unattended --url https://dev.azure.com/Afour-technology --auth pat --token $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
 
 # Start the runner
-sudo ./run.sh
+bash run.sh
 
 # Download configuration files
 #wget https://raw.githubusercontent.com/prashantsakharkar/secureline/main/values.yaml -P /home/ubuntu
@@ -117,5 +117,5 @@ sleep 5
 curl -X 'POST' 'http://'$defectdojodomain':30001/api/v2/product_api_scan_configurations/' -H 'accept: application/json' -H 'Content-Type: application/json' -H 'Authorization: Token '$defectdojotoken'' -d '{ "service_key_1": "securityproject", "product": 1, "tool_configuration": 1}'
 
 # Clean up
-rm -rf /home/ubuntu/values.yaml
-rm -rf /home/ubuntu/defectdojo.yaml
+#rm -rf /home/ubuntu/values.yaml
+#rm -rf /home/ubuntu/defectdojo.yaml

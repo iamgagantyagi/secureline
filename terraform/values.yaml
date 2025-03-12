@@ -23,7 +23,9 @@ OpenShift:
   enabled: false
   createSCC: true
 
-edition: "community"
+#edition: "community"
+community:
+ enabled: true 
 
 image:
   repository: sonarqube
