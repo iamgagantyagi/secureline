@@ -53,7 +53,7 @@ stages:
             displayName: 'Install dependencies'
           - script: |
               echo "Started scanning code repositories for vulnerabilities related to secret keys."
-              trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
+              /home/ubuntu/.local/bin/trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
               echo "Scanning completed."
             displayName: 'Run Trufflehog3 Scan'
           - task: AzureCLI@2
