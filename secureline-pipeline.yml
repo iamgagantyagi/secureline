@@ -94,6 +94,7 @@ stages:
         steps:
           - script: |
               echo "Installing dependencies for Source Composition Analysis"
+              sudo apt install unzip -y
               wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
               unzip dependency-check-7.4.0-release.zip
               rm dependency-check-7.4.0-release.zip
@@ -105,8 +106,14 @@ stages:
               dependency-check.sh -o './' -s './' -f 'ALL' --prettyPrint
               echo "Scanning completed."
             displayName: 'Run Dependency Check'
-          - script: |
-              az storage blob upload --file dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Dependency Check Results'
 
           - script: |
@@ -140,6 +147,7 @@ stages:
         steps:
           - script: |
               echo "Installing dependencies for Static Application Security Testing (SAST)"
+              sudo apt install unzip -y
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
               mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
@@ -149,13 +157,13 @@ stages:
 
           - script: |
               echo "Cloning the repository"
-              git clone https://$(GitHubUsername):$(GitHubToken)@$(GitHubURL) $HOME/webgoat
+              git clone https://github.com/iamgagantyagi/WebGoat.git
             displayName: 'Clone Repository'
 
           - script: |
               echo "Started scanning for Static Application Security Testing (SAST)"
-              cd $HOME/webgoat
-              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/webgoat/src/main/java" -Dsonar.token="$(SonarQubeToken)" -Dsonar.projectKey="securityproject"
+              cd $HOME/WebGoat
+              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(SonarQubeToken)" -Dsonar.projectKey="securityproject"
               echo "Scanning completed."
             displayName: 'Run SonarQube Scan'
 
@@ -180,8 +188,13 @@ stages:
               if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
             displayName: 'Send SonarQube Results to DefectDojo'
 
-          - script: |
-              az storage blob upload --file sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload SonarQube Scan Results'
 
   - stage: ContainersConfigurationScan
@@ -199,8 +212,14 @@ stages:
               kubescape scan WebGoat/webgoat_K8S.yml --format junit --output K8S_config_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
-          - script: |
-              az storage blob upload --file K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |  
+                az storage blob upload --file K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Kubescape Scan Results'
 
   - stage: GenerateBuild
@@ -243,8 +262,14 @@ stages:
               trivy image -f json -o Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Scan'
-          - script: |
-              az storage blob upload --file Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |  
+                az storage blob upload --file Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
@@ -273,11 +298,17 @@ stages:
               echo "Running ZAP docker container and scanning full Scan"
               mkdir $(pwd)/zapmount
               chmod -R 777 $(pwd)/zapmount
-              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://secureline.in:30002/WebGoat -x zap_report || true
+              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://172.203.163.76:30002/WebGoat -x zap_report || true
               echo "Scanning completed."
             displayName: 'Run ZAP Scan'
-          - script: |
-              az storage blob upload --file $(pwd)/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file $(pwd)/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload ZAP Scan Results'
 
           - script: |
@@ -317,11 +348,17 @@ stages:
               curl -s "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh" | /bin/bash
               export PATH=$PATH:$HOME/.kubescape/bin
             displayName: 'Install dependencies'
-          - script: |
-              echo "kubescape scanning application namespace"
-              kubescape scan --include-namespaces webgoat-namespace --format junit --output k8s_namespace_scan.xml
-              echo "Uploading Kubescape scan results to Azure Blob Storage"
-              az storage blob upload --file k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "kubescape scanning application namespace"
+                kubescape scan --include-namespaces webgoat-namespace --format junit --output k8s_namespace_scan.xml
+                echo "Uploading Kubescape scan results to Azure Blob Storage"
+                az storage blob upload --file k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Container Scan and upload results'          
 
   - stage: HostVulnerabilityAssessment
@@ -335,15 +372,21 @@ stages:
               sudo apt update -y
               sudo apt install ansible -y
               sudo apt-get install python3-dateutil python3-html2text -y
-              git clone https://github.com/prashantsakharkar/a4mation
+              git clone https://github.com/iamgagantyagi/securelineparser.git
             displayName: 'Install dependencies'
-          - script: |
-              cd a4mation
-              pip install -r docs/requirements.txt
-              pip install pyOpenSSL==22.0.0
-              export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
-              sudo ansible-playbook -i src/modules/cis_audit/environment/hosts src/modules/cis_audit/run_cis_tool.yml --verbose -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
-              az storage blob upload-batch --source output_files/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                cd securelineparser
+                pip install -r requirements.txt
+                pip install pyOpenSSL==22.0.0
+                export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+                sudo ansible-playbook -i src/modules/cis_audit/environment/hosts src/modules/cis_audit/run_cis_tool.yml --verbose -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
+                az storage blob upload-batch --source output_files/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Host Vulnerability Assessment and upload results'
 
   - stage: CloudScan
@@ -361,11 +404,17 @@ stages:
               sudo apt install docker-ce -y
               sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
             displayName: 'Install dependencies'
-          - script: |
-              echo "Starting cloud scan"
-              mkdir -p $(pwd)/report
-              docker run --memory="2.5g" -v $(pwd)/reports:/app/reports securityftw/cs-suite -env aws
-              az storage blob upload-batch --source reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Starting cloud scan"
+                mkdir -p $(pwd)/report
+                docker run --memory="2.5g" -v $(pwd)/reports:/app/reports securityftw/cs-suite -env aws
+                az storage blob upload-batch --source reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'
 
   - stage: FinalResult
@@ -373,27 +422,37 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing dependencies for Final Result"
-              sudo apt-get install python3-dateutil python3-html2text -y
-              git clone https://github.com/prashantsakharkar/a4mation
-              az storage blob download-batch --source $(ArtifactContainerName)/ --destination a4mation/ --account-name $(ArtifactStorageAccount)
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Installing dependencies for Final Result"
+                sudo apt-get install python3-dateutil python3-html2text -y
+                git clone https://github.com/iamgagantyagi/securelineparser.git
+                az storage blob download-batch --source $(ArtifactContainerName)/ --destination securelineparser/ --account-name $(ArtifactStorageAccount)
             displayName: 'Install dependencies and download artifacts'
-          - script: |
-              cd a4mation/src/modules/devsecops_tool_parser/
-              pip install -r ../../docs/requirements.txt
-              pip install pyOpenSSL==22.0.0
-              export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
-              python3 run_parser.py -t "ZAP Scan" -p "../../../zap_report" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "CIS-Audit" -p "$(find ../../../HostVA/ -name 'CIS_*.json')" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "awscisaudit" -p "$(find ../../../AWS/aws_audit/*/ -type d -name final_report -exec test -e "{}/final_json" \; -print)/final_json" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "DependencyCheck Scan" -p "../../../dependency-check-report.xml" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "Kubescape Scanning" -p "../../../K8S_config_scan.xml" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "Kubescape Scanning" -p "../../../k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "Trufflehog3 Scan" -p "../../../truffelhog_output.json" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "Trivy Scanning" -p "../../../Trivy_result.json" -o "consolidated_test_output.csv"
-              python3 run_parser.py -t "sonarqube" -u "http://secureline.in:30000" -k securityproject -b main -a your-sonarqube-token -o "consolidated_test_output.csv"
-              cd ../../../
-              az storage blob upload --file output_files/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
-              az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |  
+                cd securelineparser
+                pip install -r requirements.txt
+                pip install pyOpenSSL==22.0.0
+                export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+                python3 run_parser.py -t "ZAP Scan" -p "../zap_report" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "CIS-Audit" -p "$(find ../HostVA/ -name 'CIS_*.json')" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "awscisaudit" -p "$(find ../AWS/aws_audit/*/ -type d -name final_report -exec test -e "{}/final_json" `  \; -print)/final_json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "DependencyCheck Scan" -p "../dependency-check-report.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Kubescape Scanning" -p "../K8S_config_scan.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Kubescape Scanning" -p "../k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Trufflehog3 Scan" -p "../truffelhog_output.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Trivy Scanning" -p "../Trivy_result.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "sonarqube" -u "http://172.203.163.76:30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
+                cd ../
+                az storage blob upload --file output_files/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
             displayName: 'Run Final Result Parser and upload results'
