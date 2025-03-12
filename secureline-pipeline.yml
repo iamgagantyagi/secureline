@@ -151,13 +151,12 @@ stages:
               sudo apt install unzip -y
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
-              mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
-              rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
-              chmod -R 775 /opt/sonar-scanner
             displayName: 'Install dependencies'
 
           - script: |
               echo "Cloning the repository"
+              sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+              chmod -R 775 /opt/sonar-scanner
               git clone https://github.com/iamgagantyagi/WebGoat.git
             displayName: 'Clone Repository'
 
