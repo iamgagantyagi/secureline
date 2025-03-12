@@ -38,9 +38,7 @@ stages:
           - checkout: self
             clean: true
             path: s/MyAppSourceArtifact
-          - script: echo "Source code has been checked out and az login"
-              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
-              az account set --subscription $(subscriptionid)
+          - script: echo "Source code has been checked out"
             displayName: 'Check out source code'
 
         
@@ -59,6 +57,8 @@ stages:
               echo "Scanning completed."
             displayName: 'Run Trufflehog3 Scan'
           - script: |
+              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
+              az account set --subscription $(subscriptionid)
               az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trufflehog3 Scan Results'
 
