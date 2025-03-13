@@ -269,10 +269,11 @@ stages:
         steps:
           - script: |
               echo "Installing Trivy"
-              sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.17.2
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
             displayName: 'Install Trivy'
           - script: |
               echo "Scanning Docker image"
+              export PATH=$HOME/.local/bin:$PATH
               trivy image -f json -o Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Scan'
