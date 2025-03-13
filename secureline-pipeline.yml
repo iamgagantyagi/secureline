@@ -263,12 +263,13 @@ stages:
             displayName: 'Build and Push Docker Image'
 
   - stage: TrivyDockerImageScan
+    dependsOn: GenerateBuild
     jobs:
       - job: BuildAction
         steps:
           - script: |
               echo "Installing Trivy"
-              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.17.2
+              sudo curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.17.2
             displayName: 'Install Trivy'
           - script: |
               echo "Scanning Docker image"
@@ -289,12 +290,6 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing kubectl"
-              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              sudo chmod +x kubectl
-              sudo mv kubectl /usr/local/bin
-            displayName: 'Install kubectl'
           - script: |
               echo "Deploying Application on Kubernetes"
               kubectl apply -f /home/ubuntu/WebGoat/webgoat_K8S.yml
@@ -350,10 +345,6 @@ stages:
       - job: BuildAction
         steps:
           - script: |
-              echo "Installing kubectl"
-              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              sudo chmod +x kubectl
-              sudo mv kubectl /usr/local/bin
               echo "Installing Kubescape"
               curl -s "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh" | /bin/bash
               export PATH=$PATH:$HOME/.kubescape/bin
