@@ -197,9 +197,9 @@ stages:
             condition: 
           - script: |
                cd $HOME/WebGoat
-               mvn -N io.takari:maven:wrapper
-               chmod +x mvnw
-               mvn clean install -DskipTests
+               sudo mvn -N io.takari:maven:wrapper
+               sudo chmod +x mvnw
+               sudo mvn clean install -DskipTests
             displayName: CleanUp    
 
 
@@ -302,9 +302,9 @@ stages:
         steps:
           - script: |
               echo "Running ZAP docker container and scanning full Scan"
-              mkdir $(pwd)/zapmount
-              chmod -R 777 $(pwd)/zapmount
-              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x zap_report || true
+              mkdir /home/ubuntu/zapmount
+              chmod -R 777 /home/ubuntu/zapmount
+              sudo docker run --rm -v /home/ubuntu/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x zap_report || true
               echo "Scanning completed."
             displayName: 'Run ZAP Scan'
 
@@ -314,7 +314,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload --file $(pwd)/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload ZAP Scan Results'
 
           - script: |
@@ -346,8 +346,8 @@ stages:
         steps:
           - script: |
               echo "Installing Kubescape"
-              curl -s "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh" | /bin/bash
-              export PATH=$PATH:$HOME/.kubescape/bin
+              cd /home/ubuntu/
+              curl -s "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh" | /bin/bash             
             displayName: 'Install dependencies'
 
           - task: AzureCLI@2
@@ -357,9 +357,10 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 echo "kubescape scanning application namespace"
-                kubescape scan --include-namespaces webgoat-namespace --format junit --output k8s_namespace_scan.xml
+                export PATH=$PATH:$HOME/.kubescape/bin
+                kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
                 echo "Uploading Kubescape scan results to Azure Blob Storage"
-                az storage blob upload --file k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Container Scan and upload results'          
 
   - stage: HostVulnerabilityAssessment
@@ -384,9 +385,9 @@ stages:
                 cd securelineparser
                 pip install -r requirements.txt
                 pip install pyOpenSSL==22.0.0
-                export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
-                sudo ansible-playbook -i src/modules/cis_audit/environment/hosts src/modules/cis_audit/run_cis_tool.yml --verbose -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"
-                az storage blob upload-batch --source output_files/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+                sudo export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+                python3 test_tools/cis_audit.py --test_name "CIS_Host_Check" --path "/home/ubuntu/cis_hosts.json"
+                az storage blob upload-batch --source /home/ubuntu/cis_report/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Host Vulnerability Assessment and upload results'
 
   - stage: CloudScan
@@ -395,12 +396,6 @@ stages:
         steps:
           - script: |
               echo "Installing dependencies for Cloud Scan"
-              sudo apt update -y
-              sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt update -y
-              sudo apt install docker-ce -y
               sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
             displayName: 'Install dependencies'
 
@@ -411,9 +406,9 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 echo "Starting cloud scan"
-                mkdir -p $(pwd)/report
-                docker run --memory="2.5g" -v $(pwd)/reports:/app/reports securityftw/cs-suite -env aws
-                az storage blob upload-batch --source reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
+                mkdir -p /home/ubuntu/report/
+                docker run --memory="2.5g" -v /home/ubuntu/reports:/app/reports securityftw/cs-suite -env azure
+                az storage blob upload-batch --source /home/ubuntu/reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'
 
   - stage: FinalResult
@@ -440,7 +435,7 @@ stages:
                 cd securelineparser
                 pip install -r requirements.txt
                 pip install pyOpenSSL==22.0.0
-                export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+                sudo export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
                 python3 run_parser.py -t "ZAP Scan" -p "../zap_report" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "CIS-Audit" -p "$(find ../HostVA/ -name 'CIS_*.json')" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "awscisaudit" -p "$(find ../AWS/aws_audit/*/ -type d -name final_report -exec test -e "{}/final_json" `  \; -print)/final_json" -o "consolidated_test_output.csv"
