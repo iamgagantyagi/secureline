@@ -149,6 +149,7 @@ stages:
           - script: |
               echo "Installing dependencies for Static Application Security Testing (SAST)"
               sudo apt install unzip -y
+              sudo apt install -y maven
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
             displayName: 'Install dependencies'
