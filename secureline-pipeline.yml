@@ -105,7 +105,7 @@ stages:
               export PATH=/home/ubuntu/dependency-check/bin:$PATH
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
-              dependency-check.sh -o './' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
+              dependency-check.sh -o '/home/ubuntu/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
               echo "Scanning completed."
             displayName: 'Run Dependency Check'
 
