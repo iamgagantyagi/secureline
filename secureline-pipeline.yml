@@ -98,7 +98,7 @@ stages:
               wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
               unzip dependency-check-7.4.0-release.zip
               chmod -R 775 dependency-check/bin/dependency-check.sh
-              export PATH=dependency-check/bin:$PATH
+              export PATH=/home/ubuntu/dependency-check/bin:$PATH
               
             displayName: 'Install dependencies'
           - script: |
@@ -168,6 +168,7 @@ stages:
               mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine"
               echo "Scanning completed."
               echo "Generating SonarQube report..."
+              cd /home/ubuntu/
               curl -u "$(Sonartoken):" "http://$(DefectDojoDomain):30000/api/issues/search?componentKeys=securityproject" -o sonar-report.json
             displayName: 'Run SonarQube and store Scan'
 
