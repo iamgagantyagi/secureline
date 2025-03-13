@@ -88,7 +88,6 @@ stages:
             displayName: 'Send Trufflehog3 Results to DefectDojo' 
 
   - stage: SourceCompositionAnalysis
-    dependsOn: SecretsScanner
     jobs:
       - job: BuildAction
         steps:
@@ -144,7 +143,6 @@ stages:
  
 
   - stage: StaticApplicationSecurityTesting
-    dependsOn: SourceCompositionAnalysis
     jobs:
       - job: BuildAction
         steps:
@@ -152,6 +150,7 @@ stages:
               echo "Installing dependencies for Static Application Security Testing (SAST)"
               cd /home/ubuntu/
               sudo apt install -y maven
+              rm -rf sonar-scanner-5.0.1.3006-linux
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
               rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
@@ -214,7 +213,6 @@ stages:
             displayName: 'Upload SonarQube Scan Results'
 
   - stage: ContainersConfigurationScan
-    dependsOn: StaticApplicationSecurityTesting
     jobs:
       - job: BuildAction
         steps:
@@ -240,7 +238,6 @@ stages:
             displayName: 'Upload Kubescape Scan Results'
 
   - stage: GenerateBuild
-    dependsOn: ContainersConfigurationScan
     jobs:
       - job: BuildAction
         steps:
@@ -266,7 +263,6 @@ stages:
             displayName: 'Build and Push Docker Image'
 
   - stage: TrivyDockerImageScan
-    dependsOn: GenerateBuild
     jobs:
       - job: BuildAction
         steps:
@@ -290,7 +286,6 @@ stages:
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
-    dependsOn: TrivyDockerImageScan
     jobs:
       - job: BuildAction
         steps:
@@ -307,7 +302,6 @@ stages:
             displayName: 'Deploy Application'
 
   - stage: DynamicApplicationSecurityTesting
-    dependsOn: DeployApplication
     jobs:
       - job: BuildAction
         steps:
@@ -352,7 +346,6 @@ stages:
             displayName: 'Send SonarQube Results to DefectDojo'
 
   - stage: ContainerScan
-    dependsOn: DynamicApplicationSecurityTesting
     jobs:
       - job: BuildAction
         steps:
@@ -379,7 +372,6 @@ stages:
             displayName: 'Run Container Scan and upload results'          
 
   - stage: HostVulnerabilityAssessment
-    dependsOn: ContainerScan
     jobs:
       - job: BuildAction
         steps:
@@ -407,7 +399,6 @@ stages:
             displayName: 'Run Host Vulnerability Assessment and upload results'
 
   - stage: CloudScan
-    dependsOn: HostVulnerabilityAssessment
     jobs:
       - job: BuildAction
         steps:
@@ -435,7 +426,6 @@ stages:
             displayName: 'Run Cloud Scan and upload results'
 
   - stage: FinalResult
-    dependsOn: CloudScan
     jobs:
       - job: BuildAction
         steps:
