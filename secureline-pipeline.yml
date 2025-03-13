@@ -96,7 +96,7 @@ stages:
               echo "Installing dependencies for Source Composition Analysis"
               cd /home/ubuntu/
               wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
-              unzip dependency-check-7.4.0-release.zip
+              unzip -o dependency-check-7.4.0-release.zip
               rm -rf dependency-check-7.4.0-release.zip
               chmod -R 775 dependency-check/bin/dependency-check.sh   
               
