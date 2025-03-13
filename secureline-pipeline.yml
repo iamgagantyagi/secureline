@@ -273,8 +273,9 @@ stages:
             displayName: 'Install Trivy'
           - script: |
               echo "Scanning Docker image"
+              cd /home/ubuntu/
               export PATH=$HOME/.local/bin:$PATH
-              trivy image -f json -o Trivy_result.json gtyagi017/webgoat:latest
+              trivy image -f json -o /home/ubuntu/Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Scan'
 
