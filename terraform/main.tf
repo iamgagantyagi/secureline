@@ -188,6 +188,7 @@ resource "null_resource" "vm_provisioner" {
     "dos2unix /home/ubuntu/dd.py",
     "dos2unix /home/ubuntu/defectdojo.yaml",
     "dos2unix /home/ubuntu/values.yaml",
+    "export PUBLIC_IP=${azurerm_public_ip.publicip.ip_address}",
     "chmod +x /home/ubuntu/setup.sh",
     "dos2unix /home/ubuntu/setup.sh",
     "/home/ubuntu/setup.sh"

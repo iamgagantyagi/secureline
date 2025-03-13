@@ -67,9 +67,9 @@ stages:
 
           - script: |
               echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(defectdojodomain):30001/api/v2/import-scan/" \
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
-              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Authorization: Token $(defectdojotoken)" \
               -H "Content-Type: multipart/form-data" \
               -F "active=true" \
               -F "verified=true" \
@@ -94,7 +94,6 @@ stages:
         steps:
           - script: |
               echo "Installing dependencies for Source Composition Analysis"
-              sudo apt install unzip -y
               wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
               unzip dependency-check-7.4.0-release.zip
               
@@ -119,9 +118,9 @@ stages:
 
           - script: |
               echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(defectdojodomain):30001/api/v2/import-scan/" \
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
-              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Authorization: Token $(defectdojotoken)" \
               -H "Content-Type: multipart/form-data" \
               -F "active=true" \
               -F "verified=true" \
@@ -148,12 +147,6 @@ stages:
         steps:
           - script: |
               echo "Installing dependencies for Static Application Security Testing (SAST)"
-              sudo apt install unzip -y
-              sudo apt update
-              sudo apt install -y openjdk-21-jdk
-              echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc
-              echo 'export PATH=$JAVA_HOME/bin:$PATH' >> ~/.bashrc
-              source ~/.bashrc
               sudo apt install -y maven
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
@@ -170,15 +163,17 @@ stages:
               echo "Started scanning for Static Application Security Testing (SAST)"
               cd $HOME/WebGoat
               git init
-              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonarqubeusertoken)" -Dsonar.projectKey="securityproject"
+              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine"
               echo "Scanning completed."
-            displayName: 'Run SonarQube Scan'
+              echo "Generating SonarQube report..."
+              curl -u "$(Sonartoken):" "http://$(DefectDojoDomain):30000/api/issues/search?componentKeys=securityproject" -o sonar-report.json
+            displayName: 'Run SonarQube and store Scan'
 
           - script: |
               echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(defectdojodomain):30001/api/v2/import-scan/" \
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
-              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Authorization: Token $(defectdojotoken)" \
               -H "Content-Type: multipart/form-data" \
               -F "active=true" \
               -F "verified=true" \
@@ -209,7 +204,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload --file sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload SonarQube Scan Results'
 
   - stage: ContainersConfigurationScan
@@ -224,7 +219,7 @@ stages:
             displayName: 'Install dependencies'
           - script: |
               echo "Scanning YAML for application"
-              kubescape scan WebGoat/webgoat_K8S.yml --format junit --output K8S_config_scan.xml
+              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output K8S_config_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
 
@@ -253,7 +248,7 @@ stages:
             displayName: 'Install dependencies'
           - script: |
               echo "Executing build commands"
-              cd WebGoat
+              cd /home/ubuntu/WebGoat
               git checkout main
               sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
               sudo ./mvnw clean install
@@ -284,7 +279,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |  
-                az storage blob upload --file Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
@@ -300,7 +295,7 @@ stages:
             displayName: 'Install kubectl'
           - script: |
               echo "Deploying Application on Kubernetes"
-              kubectl apply -f WebGoat/webgoat_K8S.yml
+              kubectl apply -f /home/ubuntu/WebGoat/webgoat_K8S.yml
               echo "Deployment completed."
             displayName: 'Deploy Application'
 
@@ -313,7 +308,7 @@ stages:
               echo "Running ZAP docker container and scanning full Scan"
               mkdir $(pwd)/zapmount
               chmod -R 777 $(pwd)/zapmount
-              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://172.203.163.76:30002/WebGoat -x zap_report || true
+              sudo docker run --rm -v $(pwd)/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x zap_report || true
               echo "Scanning completed."
             displayName: 'Run ZAP Scan'
 
@@ -466,7 +461,7 @@ stages:
                 python3 run_parser.py -t "Kubescape Scanning" -p "../k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "Trufflehog3 Scan" -p "../truffelhog_output.json" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "Trivy Scanning" -p "../Trivy_result.json" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "sonarqube" -u "http://172.203.163.76:30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
                 cd ../
                 az storage blob upload --file output_files/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
                 az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
