@@ -165,7 +165,7 @@ stages:
               echo "Started scanning for Static Application Security Testing (SAST)"
               cd $HOME/WebGoat
               git init
-              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(SonarQubeToken)" -Dsonar.projectKey="securityproject"
+              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonarqubeusertoken)" -Dsonar.projectKey="securityproject"
               echo "Scanning completed."
             displayName: 'Run SonarQube Scan'
 
