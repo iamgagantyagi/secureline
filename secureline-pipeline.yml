@@ -67,7 +67,7 @@ stages:
 
           - script: |
               echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              curl -X POST "http://$(defectdojodomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
               -H "Authorization: Token $(DefectDojoToken)" \
               -H "Content-Type: multipart/form-data" \
@@ -119,7 +119,7 @@ stages:
 
           - script: |
               echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              curl -X POST "http://$(defectdojodomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
               -H "Authorization: Token $(DefectDojoToken)" \
               -H "Content-Type: multipart/form-data" \
@@ -149,6 +149,11 @@ stages:
           - script: |
               echo "Installing dependencies for Static Application Security Testing (SAST)"
               sudo apt install unzip -y
+              sudo apt update
+              sudo apt install -y openjdk-21-jdk
+              echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc
+              echo 'export PATH=$JAVA_HOME/bin:$PATH' >> ~/.bashrc
+              source ~/.bashrc
               sudo apt install -y maven
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
@@ -171,7 +176,7 @@ stages:
 
           - script: |
               echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              curl -X POST "http://$(defectdojodomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
               -H "Authorization: Token $(DefectDojoToken)" \
               -H "Content-Type: multipart/form-data" \
@@ -191,6 +196,7 @@ stages:
             displayName: 'Send SonarQube Results to DefectDojo'
             condition: 
           - script: |
+               cd $HOME/WebGoat
                mvn -N io.takari:maven:wrapper
                chmod +x mvnw
                mvn clean install -DskipTests
@@ -324,7 +330,7 @@ stages:
               echo "Sending zap report to DefectDojo"
               curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
               -H "accept: application/json" \
-              -H "Authorization: Token $(DefectDojoToken)" \
+              -H "Authorization: Token $(defectdojotoken)" \
               -H "Content-Type: multipart/form-data" \
               -F "active=true" \
               -F "verified=true" \
