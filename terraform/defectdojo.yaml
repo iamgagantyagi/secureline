@@ -499,7 +499,7 @@ redis:
 # To add extra variables not predefined by helm config it is possible to define in extraConfigs block, e.g. below:
 # NOTE  Do not store any kind of sensitive information inside of it
 extraConfigs:
-  DD_ALLOWED_HOSTS: '$DefectDojodomain'
+  DD_ALLOWED_HOSTS: '$DefectDojoDomain'
   DD_CSRF_COOKIE_SECURE: 'False'
 #   DD_SOCIAL_AUTH_AUTH0_OAUTH2_ENABLED: 'true'
 #   DD_SOCIAL_AUTH_AUTH0_KEY: 'dev'
