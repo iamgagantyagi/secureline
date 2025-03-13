@@ -54,7 +54,7 @@ DefectDojoDomain=$(az keyvault secret show --name DefectDojodomain --vault-name 
 
 # Update configuration files with secrets
 sed -i "s/\$sonarqubepassword/$sonarqubepassword/g; s/\$postgresqlPassword/$postgresqlPassword/g; s/\$postgresqlUsername/$postgresqlUsername/g; s/\$postgresqlDatabase/$postgresqlDatabase/g" /home/ubuntu/values.yaml
-sed -i "s/\$defectdojoUIPassword/$defectdojoUIPassword/g; s/\$defectdojopostgresqlUsername/$defectdojopostgresqlUsername/g; s/\$defectdojopostgresqlPassword/$defectdojopostgresqlPassword/g; s/\$defectdojodatabase/$defectdojodatabase/g; s/\$rabbitmqpassword/$rabbitmqpassword/g; s/\$Defectdojodomain/$DefectDojoDomain/g" /home/ubuntu/defectdojo.yaml
+sed -i "s/\$defectdojoUIPassword/$defectdojoUIPassword/g; s/\$defectdojopostgresqlUsername/$defectdojopostgresqlUsername/g; s/\$defectdojopostgresqlPassword/$defectdojopostgresqlPassword/g; s/\$defectdojodatabase/$defectdojodatabase/g; s/\$rabbitmqpassword/$rabbitmqpassword/g; s/\$DefectDojoDomain/$DefectDojoDomain/g" /home/ubuntu/defectdojo.yaml
 
 # Deploy SonarQube
 helm repo add sonarqube https://SonarSource.github.io/helm-chart-sonarqube
