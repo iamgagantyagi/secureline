@@ -306,7 +306,7 @@ stages:
               echo "Running ZAP docker container and scanning full Scan"
               mkdir /home/ubuntu/zapmount
               chmod -R 777 /home/ubuntu/zapmount
-              sudo docker run --rm -v /home/ubuntu/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x zap_report || true
+              sudo docker run --rm -v /home/ubuntu/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x /zap/wrk/zap_report.xml || true
               echo "Scanning completed."
             displayName: 'Run ZAP Scan'
 
@@ -316,7 +316,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload --file /home/ubuntu/zapmount/zap_report --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/zapmount/zap_report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload ZAP Scan Results'
 
           - script: |
