@@ -97,6 +97,7 @@ stages:
               cd /home/ubuntu/
               wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
               unzip dependency-check-7.4.0-release.zip
+              rm -rf dependency-check-7.4.0-release.zip
               chmod -R 775 dependency-check/bin/dependency-check.sh
               export PATH=/home/ubuntu/dependency-check/bin:$PATH
               
@@ -104,7 +105,7 @@ stages:
           - script: |
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
-              dependency-check.sh -o './' -s 'WebGoat' -f 'ALL' --prettyPrint
+              dependency-check.sh -o './' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
               echo "Scanning completed."
             displayName: 'Run Dependency Check'
 
@@ -152,6 +153,7 @@ stages:
               sudo apt install -y maven
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+              rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
               sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
               chmod -R 775 /opt/sonar-scanner
             displayName: 'Install dependencies'
