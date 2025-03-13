@@ -220,12 +220,12 @@ stages:
           - script: |
               echo "Installing dependencies for Containers Configuration Scan"
               cd /home/ubuntu/
-              curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-              export PATH=$PATH:$HOME/.kubescape/bin
+              curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash       
             displayName: 'Install dependencies'
           - script: |
               echo "Scanning YAML for application"
-              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output K8S_config_scan.xml
+              export PATH=$PATH:$HOME/.kubescape/bin
+              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
 
@@ -235,7 +235,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |  
-                az storage blob upload --file K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Kubescape Scan Results'
 
   - stage: GenerateBuild
