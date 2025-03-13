@@ -98,11 +98,11 @@ stages:
               wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
               unzip dependency-check-7.4.0-release.zip
               rm -rf dependency-check-7.4.0-release.zip
-              chmod -R 775 dependency-check/bin/dependency-check.sh
-              export PATH=/home/ubuntu/dependency-check/bin:$PATH
+              chmod -R 775 dependency-check/bin/dependency-check.sh   
               
             displayName: 'Install dependencies'
           - script: |
+              export PATH=/home/ubuntu/dependency-check/bin:$PATH
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
               dependency-check.sh -o './' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
