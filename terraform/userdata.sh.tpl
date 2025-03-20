@@ -28,6 +28,7 @@ sudo sysctl -p
 # Parallel dependency installations
 echo "Installing dependencies in parallel"
 sudo apt-get update -y
+sudo apt-get install -y unzip
 
 # Install packages in a single command to reduce apt operations
 sudo apt-get install -y ca-certificates curl gnupg lsb-release jq python3-pip apt-transport-https
@@ -76,8 +77,19 @@ sudo systemctl restart containerd
 
 # Install docker-compose standalone if needed
 echo "Installing docker-compose (standalone version)"
+sudo usermod -aG docker ubuntu
 sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
+
+
+# Install Chrome and Selenium in the background
+(
+  echo "Installing Chrome and Selenium"
+  pip install selenium --quiet
+  wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+  sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
+  rm google-chrome-stable_current_amd64.deb
+) &
 
 # Initialize Kubernetes
 echo "Initializing Kubernetes master"

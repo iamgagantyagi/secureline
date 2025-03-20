@@ -19,7 +19,7 @@ az login --identity --username $MSI_ID &
 echo "Installing dependencies"
 (
   sudo apt-get update -y
-  sudo apt-get install -y curl git unzip maven jq python3-pip
+  sudo apt-get install -y curl git gnupg xmlstartlet maven jq python3-pip
   
   # Install OpenJDK 21 in parallel
   sudo apt-get install -y openjdk-21-jdk
@@ -39,7 +39,7 @@ echo "Installing dependencies"
   cd /home/ubuntu/
   wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
   unzip -q -o dependency-check-7.4.0-release.zip
-  rm -rf dependency-check-7.4.0-release.zip
+  #rm -rf dependency-check-7.4.0-release.zip
   chmod -R 775 dependency-check/bin/dependency-check.sh
 ) &
 
@@ -49,7 +49,7 @@ echo "Installing dependencies"
   cd /home/ubuntu/
   wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
   unzip -q sonar-scanner-cli-5.0.1.3006-linux.zip
-  rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
+  #rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
   sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
   chmod -R 775 /opt/sonar-scanner
 ) &
@@ -79,10 +79,7 @@ echo "Installing dependencies"
 (
   echo "Setting up Greenbone/OpenVAS"
   cd /home/ubuntu/
-  curl -s -f -O https://greenbone.github.io/docs/latest/_static/setup-and-start-greenbone-community-edition.sh
-  chmod u+x setup-and-start-greenbone-community-edition.sh
-  sudo ./setup-and-start-greenbone-community-edition.sh
-
+ 
   # Pre-pull OpenVAS images to avoid timeouts
   echo "Pre-pulling Greenbone Docker images"
   images=(
@@ -114,18 +111,9 @@ echo "Installing dependencies"
   sudo docker pull registry.community.greenbone.net/community/gpg-data:stable --disable-content-trust
 
   # Start OpenVAS
-  cd /home/ubuntu/greenbone-community-edition
-  sudo docker-compose up -d
-
-  # Ensure gvm-tools container is running
-  GVM_CONTAINER_ID=$(sudo docker ps -aqf "name=gvm-tools")
-  if [ -n "$GVM_CONTAINER_ID" ]; then
-    RUNNING=$(sudo docker ps -qf "name=gvm-tools")
-    if [ -z "$RUNNING" ]; then
-      sudo docker start "$GVM_CONTAINER_ID"
-    fi
-  fi
-) &
+  cd /home/ubuntu/
+  docker-compose up -d
+  docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!
 
 # Wait for Azure login to complete
 wait $!
@@ -147,7 +135,7 @@ pattoken=$(az keyvault secret show --name pattoken --vault-name $KEY_VAULT_NAME 
 
 # Set DefectDojoDomain in KeyVault
 az keyvault secret set --vault-name $KEY_VAULT_NAME --name "DefectDojoDomain" --value "$PUBLIC_IP"
-DefectDojoDomain=$(az keyvault secret show --name DefectDojodomain --vault-name $KEY_VAULT_NAME --query value -o tsv)
+DefectDojoDomain=$(az keyvault secret show --name DefectDojoDomain --vault-name $KEY_VAULT_NAME --query value -o tsv)
 
 # Wait for all background installations to complete
 echo "Waiting for background installations to complete..."

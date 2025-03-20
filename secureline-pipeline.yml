@@ -32,7 +32,7 @@ variables:
 - name: GVM_USER
   value: 'admin'
 - name: GVM_PASSWORD
-  value: 'admin'
+  value: 'Admin1234!'
 - name: TARGET_NAME
   value: 'secureline-target'
 - name: TASK_NAME
@@ -357,25 +357,25 @@ stages:
 
               echo "Creating target and initiating scan..."
               # Check if target exists or create it
-              TARGET_RESPONSE=$(sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$(TARGET_IP)</hosts><port_range>1-65535</port_range></create_target>")
+              TARGET_RESPONSE=$(sudo docker exec -u gvm $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$(TARGET_IP)</hosts><port_range>1-65535</port_range></create_target>")
               
               if [[ "$TARGET_RESPONSE" == *"Target exists already"* ]]; then
-                TARGET_ID=$(sudo docker exec  $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
+                TARGET_ID=$(sudo docker exec -u gvm $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
               else
                 TARGET_ID=$(echo "$TARGET_RESPONSE" | xmlstarlet sel -t -m "//create_target_response" -v "@id" -n)
               fi
               
               # Create and start task in one step
-              TASK_RESPONSE=$(sudo docker exec  $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><scanner id='08b69003-5fc2-4037-a479-93b440211c73'/><config id='daba56c8-73ec-11df-a475-002264764cea'/></create_task>")
+              TASK_RESPONSE=$(sudo docker exec -u gvm $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><scanner id='08b69003-5fc2-4037-a479-93b440211c73'/><config id='daba56c8-73ec-11df-a475-002264764cea'/></create_task>")
               TASK_ID=$(echo "$TASK_RESPONSE" | xmlstarlet sel -t -m "//create_task_response" -v "@id" -n)
               
               # Start the scan
-              sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID' />"
+              sudo docker exec -u gvm $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID' />"
               
               # Monitor scan with simplified polling
               TIMEOUT=$(( $(date +%s) + $(SCAN_TIMEOUT) ))
               while [ $(date +%s) -lt $TIMEOUT ]; do
-                SCAN_STATUS=$(sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks task_id='$TASK_ID'/>")
+                SCAN_STATUS=$(sudo docker exec -u gvm $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks task_id='$TASK_ID'/>")
                 
                 if [[ "$SCAN_STATUS" == *"<status>Done</status>"* ]]; then
                   REPORT_ID=$(echo "$SCAN_STATUS" | xmlstarlet sel -t -m "//report" -v "@id" -n)
@@ -395,7 +395,7 @@ stages:
               
               # Generate XML report instead of PDF
               echo "Generating XML vulnerability report..."
-              sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='a994b278-1f62-11e1-96ac-406186ea4fc5' details='True' />" | \
+              sudo docker exec -u $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
               grep -oP '(?<=</report_format>)[^<]+' | \
               base64 -d > /home/ubuntu/CIS_Audit.xml
               

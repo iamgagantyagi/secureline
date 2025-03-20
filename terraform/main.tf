@@ -169,8 +169,10 @@ resource "null_resource" "vm_provisioner" {
   source      = "./values.yaml"  # Local path on your Windows machine
   destination = "/home/ubuntu/values.yaml"     # Destination on the remote machine
 }  
-  
-
+  provisioner "file" { 
+    source = "./docker-compose.yml"
+    destination = "/home/ubuntu/docker-compose.yml"
+}
   provisioner "remote-exec" {
     inline = [
     # "export ARM_CLIENT_ID=${var.client_id}",
