@@ -29,6 +29,16 @@ variables:
   value: 'securelinestorage'
 - name: ArtifactContainerName
   value: 'securelineartifacts'
+- name: GVM_USER
+  value: 'admin'
+- name: GVM_PASSWORD
+  value: 'admin'
+- name: TARGET_NAME
+  value: 'secureline-target'
+- name: TASK_NAME
+  value: 'secureline-vunerability-scan'
+- name: SCAN_TIMEOUT
+  value: '600'
 
 stages:
   - stage: Initialize
@@ -47,10 +57,6 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing dependencies for Secret Scanning"
-              pip install trufflehog3
-            displayName: 'Install dependencies'
           - script: |
               echo "Started scanning code repositories for vulnerabilities related to secret keys."
               /home/ubuntu/.local/bin/trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
@@ -91,16 +97,6 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing dependencies for Source Composition Analysis"
-              cd /home/ubuntu/
-              rm -rf dependency-check
-              wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
-              unzip -o dependency-check-7.4.0-release.zip
-              rm -rf dependency-check-7.4.0-release.zip
-              chmod -R 775 dependency-check/bin/dependency-check.sh   
-              
-            displayName: 'Install dependencies'
           - script: |
               export PATH=/home/ubuntu/dependency-check/bin:$PATH
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
@@ -146,18 +142,6 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing dependencies for Static Application Security Testing (SAST)"
-              cd /home/ubuntu/
-              sudo apt install -y maven
-              rm -rf sonar-scanner-5.0.1.3006-linux
-              wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-              unzip sonar-scanner-cli-5.0.1.3006-linux.zip
-              rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
-              sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
-              chmod -R 775 /opt/sonar-scanner
-            displayName: 'Install dependencies'
-
           - script: |
               echo "Cloning the repository"
               git clone https://github.com/iamgagantyagi/WebGoat.git
@@ -217,11 +201,6 @@ stages:
       - job: BuildAction
         steps:
           - script: |
-              echo "Installing dependencies for Containers Configuration Scan"
-              cd /home/ubuntu/
-              curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash       
-            displayName: 'Install dependencies'
-          - script: |
               echo "Scanning YAML for application"
               export PATH=$PATH:$HOME/.kubescape/bin
               kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
@@ -242,15 +221,6 @@ stages:
       - job: BuildAction
         steps:
           - script: |
-              echo "Installing docker & mvnw"
-              sudo apt update -y
-              sudo apt install apt-transport-https ca-certificates curl software-properties-common -y
-              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-              sudo apt update -y
-              sudo apt install docker-ce maven -y
-            displayName: 'Install dependencies'
-          - script: |
               echo "Executing build commands"
               cd /home/ubuntu/WebGoat
               git checkout main
@@ -267,10 +237,6 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing Trivy"
-              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
-            displayName: 'Install Trivy'
           - script: |
               echo "Scanning Docker image"
               cd /home/ubuntu/
@@ -346,12 +312,6 @@ stages:
     jobs:
       - job: BuildAction
         steps:
-          - script: |
-              echo "Installing Kubescape"
-              cd /home/ubuntu/
-              curl -s "https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh" | /bin/bash             
-            displayName: 'Install dependencies'
-
           - task: AzureCLI@2
             inputs:
               azureSubscription: 'secureline'
@@ -363,34 +323,7 @@ stages:
                 kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
                 echo "Uploading Kubescape scan results to Azure Blob Storage"
                 az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Run Container Scan and upload results'          
-
-  - stage: HostVulnerabilityAssessment
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Installing dependencies for Host Vulnerability Assessment"
-              sudo apt-add-repository ppa:ansible/ansible
-              sudo apt update -y
-              sudo apt install ansible -y
-              sudo apt-get install python3-dateutil python3-html2text -y
-              git clone https://github.com/iamgagantyagi/securelineparser.git
-            displayName: 'Install dependencies'
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                cd securelineparser
-                pip install -r requirements.txt
-                pip install pyOpenSSL==22.0.0
-                sudo export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
-                python3 test_tools/cis_audit.py --test_name "CIS_Host_Check" --path "/home/ubuntu/cis_hosts.json"
-                az storage blob upload-batch --source /home/ubuntu/cis_report/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Run Host Vulnerability Assessment and upload results'
+            displayName: 'Run Container Scan and upload results'   
 
   - stage: CloudScan
     jobs:
@@ -411,7 +344,81 @@ stages:
                 mkdir -p /home/ubuntu/report/
                 docker run --memory="2.5g" -v /home/ubuntu/reports:/app/reports securityftw/cs-suite -env azure
                 az storage blob upload-batch --source /home/ubuntu/reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Run Cloud Scan and upload results'
+            displayName: 'Run Cloud Scan and upload results'       
+
+  - stage: HostVulnerabilityAssessment
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Installing dependencies for Host Vulnerability Assessment"
+              TARGET_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+              DOCKER_CONTAINER_ID=$(sudo docker ps --filter "name=gvm-tools" --format "{{.ID}}")
+
+              echo "Creating target and initiating scan..."
+              # Check if target exists or create it
+              TARGET_RESPONSE=$(sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$(TARGET_IP)</hosts><port_range>1-65535</port_range></create_target>")
+              
+              if [[ "$TARGET_RESPONSE" == *"Target exists already"* ]]; then
+                TARGET_ID=$(sudo docker exec  $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
+              else
+                TARGET_ID=$(echo "$TARGET_RESPONSE" | xmlstarlet sel -t -m "//create_target_response" -v "@id" -n)
+              fi
+              
+              # Create and start task in one step
+              TASK_RESPONSE=$(sudo docker exec  $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><scanner id='08b69003-5fc2-4037-a479-93b440211c73'/><config id='daba56c8-73ec-11df-a475-002264764cea'/></create_task>")
+              TASK_ID=$(echo "$TASK_RESPONSE" | xmlstarlet sel -t -m "//create_task_response" -v "@id" -n)
+              
+              # Start the scan
+              sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID' />"
+              
+              # Monitor scan with simplified polling
+              TIMEOUT=$(( $(date +%s) + $(SCAN_TIMEOUT) ))
+              while [ $(date +%s) -lt $TIMEOUT ]; do
+                SCAN_STATUS=$(sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks task_id='$TASK_ID'/>")
+                
+                if [[ "$SCAN_STATUS" == *"<status>Done</status>"* ]]; then
+                  REPORT_ID=$(echo "$SCAN_STATUS" | xmlstarlet sel -t -m "//report" -v "@id" -n)
+                  echo "Scan completed. Report ID: $REPORT_ID"
+                  break
+                fi
+                
+                echo "Scan in progress... ($(( $TIMEOUT - $(date +%s) )) seconds remaining)"
+                sleep 30
+              done
+              
+              # Check if we timed out
+              if [[ -z "$REPORT_ID" ]]; then
+                echo "##vso[task.logissue type=error]Scan timed out"
+                exit 1
+              fi
+              
+              # Generate XML report instead of PDF
+              echo "Generating XML vulnerability report..."
+              sudo docker exec $(DOCKER_CONTAINER_ID) gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='a994b278-1f62-11e1-96ac-406186ea4fc5' details='True' />" | \
+              grep -oP '(?<=</report_format>)[^<]+' | \
+              base64 -d > /home/ubuntu/CIS_Audit.xml
+              
+              # Check if report was generated
+              if [ -f /home/ubuntu/CIS_Audit.xml ]; then
+                echo "XML report generated successfully"
+              else
+                echo "Report generation failed"
+                exit 1
+              fi
+
+            displayName: 'Install dependencies'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload-batch --source /home/ubuntu/cis_report/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Run Host Vulnerability Assessment and upload results'
+
+
 
   - stage: FinalResult
     jobs:
@@ -425,8 +432,9 @@ stages:
               inlineScript: |
                 echo "Installing dependencies for Final Result"
                 sudo apt-get install python3-dateutil python3-html2text -y
+                cd /home/ubuntu/
                 git clone https://github.com/iamgagantyagi/securelineparser.git
-                az storage blob download-batch --source $(ArtifactContainerName)/ --destination securelineparser/ --account-name $(ArtifactStorageAccount)
+                az storage blob download-batch --source $(ArtifactContainerName)/ --destination /home/ubuntu/securelineparser/ --account-name $(ArtifactStorageAccount)
             displayName: 'Install dependencies and download artifacts'
           - task: AzureCLI@2
             inputs:
@@ -434,20 +442,19 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |  
-                cd securelineparser
+                cd /home/ubuntu/securelineparser
                 pip install -r requirements.txt
                 pip install pyOpenSSL==22.0.0
                 sudo export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
-                python3 run_parser.py -t "ZAP Scan" -p "../zap_report" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "CIS-Audit" -p "$(find ../HostVA/ -name 'CIS_*.json')" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "awscisaudit" -p "$(find ../AWS/aws_audit/*/ -type d -name final_report -exec test -e "{}/final_json" `  \; -print)/final_json" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "DependencyCheck Scan" -p "../dependency-check-report.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Kubescape Scanning" -p "../K8S_config_scan.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Kubescape Scanning" -p "../k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Trufflehog3 Scan" -p "../truffelhog_output.json" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Trivy Scanning" -p "../Trivy_result.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "CIS-Audit" -p "$(find securelinescanoutput/HostVA/ -name 'CIS_*.xml')" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "DependencyCheck Scan" -p "securelinescanoutput/dependency-check-report.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/K8S_config_scan.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Trivy Scanning" -p "securelinescanoutput/Trivy_result.json" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
                 cd ../
-                az storage blob upload --file output_files/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/securelineparser/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
                 az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
             displayName: 'Run Final Result Parser and upload results'
