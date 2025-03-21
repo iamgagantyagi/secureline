@@ -22,28 +22,6 @@ def test_test():
         # Increase timeouts for slower environments
         chrome_options.add_argument("--browser-timeout=60")
         
-        # Install Chrome and ChromeDriver if needed (on Ubuntu)
-        if not os.path.exists("/usr/bin/google-chrome"):
-            print("Installing Chrome...")
-            os.system("sudo apt-get update")
-            os.system("sudo apt-get install -y wget unzip")
-            os.system("wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb")
-            os.system("sudo apt-get install -y ./google-chrome-stable_current_amd64.deb")
-        
-        if not os.path.exists("/usr/local/bin/chromedriver"):
-            print("Installing ChromeDriver...")
-            # Determine Chrome version
-            chrome_version = os.popen("google-chrome --version").read().strip().split()[2].split('.')[0]
-            print(f"Detected Chrome version: {chrome_version}")
-            
-            # Download appropriate ChromeDriver
-            os.system(f"wget -q https://chromedriver.storage.googleapis.com/LATEST_RELEASE_{chrome_version}")
-            chromedriver_version = open(f"LATEST_RELEASE_{chrome_version}").read()
-            os.system(f"wget -q https://chromedriver.storage.googleapis.com/{chromedriver_version}/chromedriver_linux64.zip")
-            os.system("unzip -o chromedriver_linux64.zip")
-            os.system("sudo mv chromedriver /usr/local/bin/")
-            os.system("sudo chmod +x /usr/local/bin/chromedriver")
-        
         # Fetch secrets from environment variables first (if available)
         sonarqubepassword = os.environ.get('SONARQUBE_PASSWORD')
         defectdojoUIPassword = os.environ.get('DEFECTDOJO_PASSWORD')

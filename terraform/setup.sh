@@ -18,7 +18,7 @@ az login --identity --username $MSI_ID &
 # Start dependency installations in parallel
   echo "Installing dependencies"
   sudo apt-get update -y
-  sudo apt-get install -y maven xmlstartlet 
+  sudo apt-get install -y maven xmlstarlet 
 
 (
   # Install OpenJDK 21 in parallel
@@ -80,56 +80,51 @@ az login --identity --username $MSI_ID &
 echo "Waiting for tool installations to complete..."
 wait
 
-# Install Openvas in background
-  echo "Setting up Greenbone/OpenVAS"
-  cd /home/ubuntu/
- 
-  # Pre-pull OpenVAS images to avoid timeouts
-  echo "Pre-pulling Greenbone Docker images"
-  images=(
-    "registry.community.greenbone.net/community/vulnerability-tests"
-    "registry.community.greenbone.net/community/notus-data"
-    "registry.community.greenbone.net/community/scap-data"
-    "registry.community.greenbone.net/community/cert-bund-data"
-    "registry.community.greenbone.net/community/dfn-cert-data"
-    "registry.community.greenbone.net/community/data-objects"
-    "registry.community.greenbone.net/community/report-formats"
-    "registry.community.greenbone.net/community/redis-server"
-    "registry.community.greenbone.net/community/pg-gvm:stable"
-    "registry.community.greenbone.net/community/gvmd:stable"
-    "registry.community.greenbone.net/community/gsa:stable"
-    "registry.community.greenbone.net/community/openvas-scanner:stable"
-    "registry.community.greenbone.net/community/ospd-openvas:stable"
-    "registry.community.greenbone.net/community/gvm-tools"
-  )
+# Start OpenVAS with retry mechanism
+max_attempts=3
+attempt=1
 
-  # Pull images one by one with retry logic to avoid EOF errors
-for image in "${images[@]}"; do
-  max_attempts=3
-  attempt=1
+while [ $attempt -le $max_attempts ]; do
+  echo "Starting OpenVAS (attempt $attempt/$max_attempts)..."
   
-  while [ $attempt -le $max_attempts ]; do
-    echo "Pulling $image (attempt $attempt/$max_attempts)..."
-    sudo docker pull "$image" && break
-    
-    echo "Failed to pull $image, retrying in 10 seconds..."
+  # Use nohup to ensure the docker-compose command continues even if the shell exits
+  cd /home/ubuntu/
+  nohup docker-compose up -d > openvas_startup.log 2>&1
+  
+  # Check if docker-compose started successfully
+  if [ $? -eq 0 ]; then
+    # Check if containers are actually running
     sleep 10
-    attempt=$((attempt+1))
-  done
-  
-  if [ $attempt -gt $max_attempts ]; then
-    echo "Warning: Failed to pull $image after $max_attempts attempts"
+    running_containers=$(docker-compose ps --services --filter "status=running" | wc -l)
+    
+    if [ $running_containers -gt 0 ]; then
+      echo "OpenVAS started successfully with $running_containers containers running"
+      
+      # Add error handling for the password setup
+      echo "Setting OpenVAS admin password"
+      if docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!; then
+        echo "Password set successfully"
+        break
+      else
+        echo "Failed to set password, but containers are running. Will retry..."
+      fi
+    else
+      echo "Docker-compose started but no containers are running"
+    fi
   fi
+  
+  echo "Failed to start OpenVAS properly, retrying in 30 seconds..."
+  docker-compose down
+  sleep 30
+  attempt=$((attempt+1))
 done
 
-  # Pull the special image
-  sudo docker pull registry.community.greenbone.net/community/gpg-data:stable --disable-content-trust
-
-  # Start OpenVAS
-  cd /home/ubuntu/
-  docker-compose up -d
-  docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!
-  wait
+if [ $attempt -gt $max_attempts ]; then
+  echo "Warning: Failed to start OpenVAS properly after $max_attempts attempts"
+  echo "Continuing with installation. OpenVAS may need manual configuration later."
+else
+  echo "OpenVAS setup completed successfully"
+fi
 
 # Set up key vault policy
 az keyvault set-policy --name $KEY_VAULT_NAME --spn $MSI_ID --secret-permissions get set

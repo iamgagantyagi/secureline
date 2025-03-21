@@ -145,6 +145,7 @@ stages:
           - script: |
               echo "Cloning the repository"
               git clone https://github.com/iamgagantyagi/WebGoat.git
+              sudo apt install maven -y
             displayName: 'Clone Repository'
 
           - script: |
