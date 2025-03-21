@@ -114,7 +114,8 @@ echo "Installing dependencies"
   cd /home/ubuntu/
   docker-compose up -d
   docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!
-
+  wait
+) &
 # Wait for Azure login to complete
 wait $!
 
