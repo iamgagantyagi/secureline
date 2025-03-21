@@ -179,10 +179,10 @@ helm repo update
 kubectl create namespace sonarqube
 kubectl create namespace defectdojo
 
-# Deploy SonarQube and DefectDojo in parallel
-helm upgrade --install -n sonarqube sonarqube sonarqube/sonarqube --values /home/ubuntu/values.yaml &
-helm upgrade --install -n defectdojo defectdojo defectdojo/defectdojo --values /home/ubuntu/defectdojo.yaml --version 1.6.134 &
-wait
+# Deploy SonarQube and DefectDojo
+helm upgrade --install -n sonarqube sonarqube sonarqube/sonarqube --values /home/ubuntu/values.yaml
+helm upgrade --install -n defectdojo defectdojo defectdojo/defectdojo --values /home/ubuntu/defectdojo.yaml --version 1.6.134 
+
 
 echo "Waiting for pods to be ready..."
 # More efficient pod readiness check with timeout
@@ -209,16 +209,30 @@ done
 
 # Add a sleep to ensure services are fully initialized
 echo "Giving services time to initialize..."
-sleep 30
+sleep 60
 
 # Patch DefectDojo service for NodePort
 echo "Configuring DefectDojo NodePort"
 kubectl patch svc defectdojo-django -n defectdojo -p '{"spec": {"type": "NodePort", "ports": [{"port": 80, "nodePort": 30001, "protocol": "TCP"}]}}' &
 
+# Verify SonarQube is responding before creating tokens
+echo "Waiting for SonarQube to be accessible..."
+max_attempts=20
+attempt=1
+while [ $attempt -le $max_attempts ]; do
+  if curl -s -o /dev/null -w "%{http_code}" "http://$DefectDojoDomain:30000"; then
+    echo "SonarQube is accessible!"
+    break
+  fi
+  echo "Waiting for SonarQube to be accessible (attempt $attempt/$max_attempts)..."
+  sleep 15
+  attempt=$((attempt+1))
+done
+
 # Create SonarQube tokens in parallel
 echo "Creating SonarQube tokens"
 (
-  sleep 5  # Brief pause to ensure SonarQube is accessible
+  sleep 30  # Brief pause to ensure SonarQube is accessible
   token=$(curl -s -u admin:$sonarqubepassword -X POST "http://$DefectDojoDomain:30000/api/user_tokens/generate" -d "name=security" -d "type=GLOBAL_ANALYSIS_TOKEN" | grep -o '"token":"[^"]*"' | cut -d':' -f2 | tr -d '"')
   az keyvault secret set --vault-name $KEY_VAULT_NAME --name "Sonartoken" --value "$token"
   
