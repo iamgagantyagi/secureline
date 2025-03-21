@@ -16,12 +16,13 @@ echo "Logging into Azure using managed identity"
 az login --identity --username $MSI_ID &
 
 # Start dependency installations in parallel
-echo "Installing dependencies"
-(
+  echo "Installing dependencies"
   sudo apt-get update -y
-  sudo apt-get install -y curl git gnupg xmlstartlet maven jq python3-pip
-  
+  sudo apt-get install -y maven xmlstartlet 
+
+(
   # Install OpenJDK 21 in parallel
+  echo "Installing OpenJDK 21"
   sudo apt-get install -y openjdk-21-jdk
   echo 'export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64' >> ~/.bashrc
   echo 'export PATH=$JAVA_HOME/bin:$PATH' >> ~/.bashrc
@@ -75,8 +76,11 @@ echo "Installing dependencies"
   tar zxf vsts-agent-linux-x64-4.252.0.tar.gz
 ) &
 
+# Wait for these parallel installations to complete
+echo "Waiting for tool installations to complete..."
+wait
+
 # Install Openvas in background
-(
   echo "Setting up Greenbone/OpenVAS"
   cd /home/ubuntu/
  
@@ -99,13 +103,24 @@ echo "Installing dependencies"
     "registry.community.greenbone.net/community/gvm-tools"
   )
 
-  # Pull images in parallel (5 at a time)
-  for i in $(seq 0 4 ${#images[@]}); do
-    for j in $(seq $i $(($i + 4)) ${#images[@]}); do
-      [ $j -lt ${#images[@]} ] && sudo docker pull "${images[$j]}" &
-    done
-    wait
+  # Pull images one by one with retry logic to avoid EOF errors
+for image in "${images[@]}"; do
+  max_attempts=3
+  attempt=1
+  
+  while [ $attempt -le $max_attempts ]; do
+    echo "Pulling $image (attempt $attempt/$max_attempts)..."
+    sudo docker pull "$image" && break
+    
+    echo "Failed to pull $image, retrying in 10 seconds..."
+    sleep 10
+    attempt=$((attempt+1))
   done
+  
+  if [ $attempt -gt $max_attempts ]; then
+    echo "Warning: Failed to pull $image after $max_attempts attempts"
+  fi
+done
 
   # Pull the special image
   sudo docker pull registry.community.greenbone.net/community/gpg-data:stable --disable-content-trust
@@ -115,9 +130,6 @@ echo "Installing dependencies"
   docker-compose up -d
   docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!
   wait
-) &
-# Wait for Azure login to complete
-wait $!
 
 # Set up key vault policy
 az keyvault set-policy --name $KEY_VAULT_NAME --spn $MSI_ID --secret-permissions get set
@@ -225,6 +237,11 @@ echo "Creating SonarQube tokens"
 
 # Wait for services to be configured
 wait
+
+# Export secrets as environment variables for dd.py
+export SONARQUBE_PASSWORD="$sonarqubepassword"
+export DEFECTDOJO_PASSWORD="$defectdojoUIPassword"
+export DEFECTDOJO_DOMAIN="$DefectDojoDomain" 
 
 # Get DefectDojo token and create configurations
 echo "Configuring DefectDojo"

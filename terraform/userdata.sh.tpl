@@ -28,7 +28,7 @@ sudo sysctl -p
 # Parallel dependency installations
 echo "Installing dependencies in parallel"
 sudo apt-get update -y
-sudo apt-get install -y unzip
+sudo apt-get install -y unzip git
 
 # Install packages in a single command to reduce apt operations
 sudo apt-get install -y ca-certificates curl gnupg lsb-release jq python3-pip apt-transport-https
