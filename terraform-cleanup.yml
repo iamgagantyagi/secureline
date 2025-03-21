@@ -32,16 +32,4 @@ stages:
               terraform init
               terraform destroy -auto-approve
             displayName: 'Destroy Terraform Resources'
-          - script: |
-              echo "FyauYkbdteKypErGK2mznAj5uJbyaNo4fThCtJS25ZU5OtRZGp3UJQQJ99BBACAAAAAba59iAAASAZDO2j4k" | az devops login --organization "https://dev.azure.com/Afour-technology"
-              AGENT_ID=$(az pipelines agent list --organization "https://dev.azure.com/Afour-technology" --pool-id "1" --query "[?name=='securelinedemo'].{id:id}" --output tsv)
-              if [ -n "$AGENT_ID" ]; then
-                echo "Found default agent with ID: $AGENT_ID"
-                # Delete the agent 
-                az pipelines agent delete --agent-id $AGENT_ID --pool-id "1" --organization "https://dev.azure.com/Afour-technology"
-                echo "Successfully deleted the 'securelinedemo' agent "
-              else
-                echo "No agent with name containing 'securelinedemo' was found"
-              fi
-            displayName: 'Clean up Azure Default Agent Pool'
   
