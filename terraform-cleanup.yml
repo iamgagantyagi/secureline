@@ -33,8 +33,7 @@ stages:
               terraform destroy -auto-approve
             displayName: 'Destroy Terraform Resources'
           - script: |
-              az login --service-principal -u $(clientid) -p $(clientsecret) --tenant $(tenantid)
-              az account set --subscription $(subscriptionid)
+              echo "FyauYkbdteKypErGK2mznAj5uJbyaNo4fThCtJS25ZU5OtRZGp3UJQQJ99BBACAAAAAba59iAAASAZDO2j4k" | az devops login --organization "https://dev.azure.com/Afour-technology"
               AGENT_ID=$(az pipelines agent list --organization "https://dev.azure.com/Afour-technology" --pool-id "1" --query "[?name=='securelinedemo'].{id:id}" --output tsv)
               if [ -n "$AGENT_ID" ]; then
                 echo "Found default agent with ID: $AGENT_ID"
