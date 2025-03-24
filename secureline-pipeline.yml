@@ -118,11 +118,12 @@ stages:
                 unzip -o dependency-check-7.4.0-release.zip
                 rm -rf dependency-check-7.4.0-release.zip
                 chmod -R 775 dependency-check/bin/dependency-check.sh
+                echo 'export PATH=/home/ubuntu/dependency-check/bin:$PATH' >> ~/.bashrc
+                source ~/.bashrc 
               fi
             displayName: 'Install Source Composition Analysis dependencies'
           - script: |
-              echo 'export PATH=/home/ubuntu/dependency-check/bin:$PATH' >> ~/.bashrc
-              source ~/.bashrc 
+              export PATH=/home/ubuntu/dependency-check/bin:$PATH
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
               dependency-check.sh -o '/home/ubuntu/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
@@ -255,12 +256,13 @@ stages:
                 echo "Installing dependencies for Containers Configuration Scan"
                 cd /home/ubuntu/
                 curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                source ~/.bashrc
               fi
             displayName: 'Install Container Scanning dependencies'
           - script: |
               echo "Scanning YAML for application"
-              echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
-              source ~/.bashrc
+              export PATH=$PATH:$HOME/.kubescape/bin
               kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
@@ -297,21 +299,21 @@ stages:
         steps:
           - script: |
               echo "Checking if trivy is already installed..."
-              if command -v kubescape &> /dev/null; then
-                echo "Kubescape is already installed, skipping installation"
+              if command -v trivy &> /dev/null; then
+                echo "trivy is already installed, skipping installation"
               else
-                echo "Installing dependencies for Containers Configuration Scan"
                 cd /home/ubuntu/
-                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+                echo "Installing Trivy"
+                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
+                echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+                source ~/.bashrc
               fi
-              echo "Installing Trivy"
-              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
+              
             displayName: 'Install Trivy'
           - script: |
+              export PATH=$HOME/.local/bin:$PATH
               echo "Scanning Docker image"
               cd /home/ubuntu/
-              echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
-              source ~/.bashrc
               trivy image -f json -o /home/ubuntu/Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Scan'
@@ -391,6 +393,8 @@ stages:
                 echo "Installing dependencies for Containers Configuration Scan"
                 cd /home/ubuntu/
                 curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                source ~/.bashrc
               fi
             displayName: 'Install Container Scanning dependencies'
           - task: AzureCLI@2
@@ -400,8 +404,7 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 echo "kubescape scanning application namespace"
-                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
-                source ~/.bashrc
+                export PATH=$PATH:$HOME/.kubescape/bin
                 kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
                 echo "Uploading Kubescape scan results to Azure Blob Storage"
                 az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
