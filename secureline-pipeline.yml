@@ -109,22 +109,72 @@ stages:
               TARGET_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
               DOCKER_CONTAINER_ID=$(sudo docker ps --filter "name=gvm-tools" --format "{{.ID}}")
 
-              echo "Creating target and initiating scan..."
-              # Check if target exists or create it
-              TARGET_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$TARGET_IP</hosts><port_range>1-65535</port_range></create_target>")
+              echo "Creating target..."
+              # First check if target exists
+              EXISTING_TARGETS=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>")
+              echo "Retrieved existing targets"
               
-              if [[ "$TARGET_RESPONSE" == *"Target exists already"* ]]; then
-                TARGET_ID=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
-              else
-                TARGET_ID=$(echo '$TARGET_RESPONSE' | xmlstarlet sel -t -m "//create_target_response" -v "@id" -n)
+              # Extract target ID if it exists
+              TARGET_ID=$(echo "$EXISTING_TARGETS" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
+              
+              # If target doesn't exist, create it
+              if [ -z "$TARGET_ID" ]; then
+                echo "Target does not exist. Creating new target..."
+                TARGET_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$TARGET_IP</hosts><port_range>1-65535</port_range></create_target>")
+                echo "Target creation response: $TARGET_RESPONSE"
+                
+                # Extract the target ID from the response
+                TARGET_ID=$(echo "$TARGET_RESPONSE" | xmlstarlet sel -t -m "//create_target_response" -v "@id" -n)
+                
+                if [ -z "$TARGET_ID" ]; then
+                  echo "##vso[task.logissue type=error]Failed to create target or extract target ID. Response: $TARGET_RESPONSE"
+                  exit 1
+                fi
               fi
               
-              # Create and start task in one step
-              TASK_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><config id='08b69003-5fc2-4037-a479-93b440211c73'/><scanner id='daba56c8-73ec-11df-a475-002264764cea'/></create_task>")
-              TASK_ID=$(echo '$TASK_RESPONSE' | xmlstarlet sel -t -m "//create_task_response" -v "@id" -n)
+              echo "Target ID: $TARGET_ID"
+              
+              # Check for existing task with the same name
+              EXISTING_TASKS=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks/>")
+              echo "Retrieved existing tasks"
+              
+              # Extract task ID if it exists
+              TASK_ID=$(echo "$EXISTING_TASKS" | xmlstarlet sel -t -m "//task[name='$(TASK_NAME)']" -v "@id" -n)
+              
+              # If task doesn't exist, create it
+              if [ -z "$TASK_ID" ]; then
+                echo "Creating new task..."
+                # Default scanner ID for OpenVAS Scanner
+                SCANNER_ID="08b69003-5fc2-4037-a479-93b440211c73"
+                
+                # Default config ID for Full and fast scan
+                CONFIG_ID="daba56c8-73ec-11df-a475-002264764cea"
+                
+                TASK_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><scanner id='$SCANNER_ID'/><config id='$CONFIG_ID'/></create_task>")
+                echo "Task creation response: $TASK_RESPONSE"
+                
+                # Extract the task ID from the response
+                TASK_ID=$(echo "$TASK_RESPONSE" | xmlstarlet sel -t -m "//create_task_response" -v "@id" -n)
+                
+                if [ -z "$TASK_ID" ]; then
+                  echo "##vso[task.logissue type=error]Failed to create task or extract task ID. Response: $TASK_RESPONSE"
+                  exit 1
+                fi
+              fi
+              
+              echo "Task ID: $TASK_ID"
               
               # Start the scan
-              sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID' />"
+              echo "Starting scan task..."
+              START_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID'/>")
+              echo "Start task response: $START_RESPONSE"
+              
+              if [[ "$START_RESPONSE" == *"status=\"202\""* ]]; then
+                echo "Scan started successfully"
+              else
+                echo "##vso[task.logissue type=warning]Scan may not have started properly. Response: $START_RESPONSE"
+                # Continue anyway as the task might still be running
+              fi
               
               # Monitor scan with simplified polling
               TIMEOUT=$(( $(date +%s) + $(SCAN_TIMEOUT) ))
