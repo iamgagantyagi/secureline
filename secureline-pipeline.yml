@@ -58,6 +58,15 @@ stages:
       - job: BuildAction
         steps:
           - script: |
+              echo "Checking if trufflehog3 is already installed..."
+              if pip list 2>/dev/null | grep -q trufflehog3; then
+                echo "trufflehog3 is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Secret Scanning"
+                pip install trufflehog3
+              fi
+            displayName: 'Install Secret Scanning dependencies' 
+          - script: |
               echo "Started scanning code repositories for vulnerabilities related to secret keys."
               /home/ubuntu/.local/bin/trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
               echo "Scanning completed."
@@ -98,13 +107,27 @@ stages:
       - job: BuildAction
         steps:
           - script: |
-              export PATH=/home/ubuntu/dependency-check/bin:$PATH
+              echo "Checking if Dependency Check is already installed..."
+              if [ -d "/home/ubuntu/dependency-check" ] && [ -f "/home/ubuntu/dependency-check/bin/dependency-check.sh" ]; then
+                echo "Dependency Check is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Source Composition Analysis"
+                cd /home/ubuntu/
+                rm -rf dependency-check
+                wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
+                unzip -o dependency-check-7.4.0-release.zip
+                rm -rf dependency-check-7.4.0-release.zip
+                chmod -R 775 dependency-check/bin/dependency-check.sh
+              fi
+            displayName: 'Install Source Composition Analysis dependencies'
+          - script: |
+              echo 'export PATH=/home/ubuntu/dependency-check/bin:$PATH' >> ~/.bashrc
+              source ~/.bashrc 
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
               dependency-check.sh -o '/home/ubuntu/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
               echo "Scanning completed."
-            displayName: 'Run Dependency Check'
-
+            displayName: 'Run Dependency Check'  
           - task: AzureCLI@2
             inputs:
               azureSubscription: 'secureline'
@@ -142,6 +165,29 @@ stages:
     jobs:
       - job: BuildAction
         steps:
+          - script: |
+              echo "Checking if Sonar Scanner is already installed..."
+              if [ -d "/opt/sonar-scanner" ] && [ -f "/opt/sonar-scanner/bin/sonar-scanner" ]; then
+                echo "Sonar Scanner is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Static Application Security Testing (SAST)"
+                cd /home/ubuntu/
+                # Check if maven is installed
+                if ! command -v mvn &> /dev/null; then
+                  sudo apt install -y maven
+                else
+                  echo "Maven is already installed, skipping installation"
+                fi
+                
+                rm -rf sonar-scanner-5.0.1.3006-linux
+                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+                unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+                rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
+                sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+                chmod -R 775 /opt/sonar-scanner
+              fi
+            displayName: 'Install SAST dependencies'
+
           - script: |
               echo "Cloning the repository"
               git clone https://github.com/iamgagantyagi/WebGoat.git
@@ -202,8 +248,19 @@ stages:
       - job: BuildAction
         steps:
           - script: |
+              echo "Checking if Kubescape is already installed..."
+              if command -v kubescape &> /dev/null; then
+                echo "Kubescape is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Containers Configuration Scan"
+                cd /home/ubuntu/
+                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+              fi
+            displayName: 'Install Container Scanning dependencies'
+          - script: |
               echo "Scanning YAML for application"
-              export PATH=$PATH:$HOME/.kubescape/bin
+              echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+              source ~/.bashrc
               kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
@@ -239,9 +296,22 @@ stages:
       - job: BuildAction
         steps:
           - script: |
+              echo "Checking if trivy is already installed..."
+              if command -v kubescape &> /dev/null; then
+                echo "Kubescape is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Containers Configuration Scan"
+                cd /home/ubuntu/
+                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+              fi
+              echo "Installing Trivy"
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
+            displayName: 'Install Trivy'
+          - script: |
               echo "Scanning Docker image"
               cd /home/ubuntu/
-              export PATH=$HOME/.local/bin:$PATH
+              echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+              source ~/.bashrc
               trivy image -f json -o /home/ubuntu/Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Scan'
@@ -313,6 +383,16 @@ stages:
     jobs:
       - job: BuildAction
         steps:
+          - script: |
+              echo "Checking if Kubescape is already installed..."
+              if command -v kubescape &> /dev/null; then
+                echo "Kubescape is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Containers Configuration Scan"
+                cd /home/ubuntu/
+                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+              fi
+            displayName: 'Install Container Scanning dependencies'
           - task: AzureCLI@2
             inputs:
               azureSubscription: 'secureline'
@@ -320,7 +400,8 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 echo "kubescape scanning application namespace"
-                export PATH=$PATH:$HOME/.kubescape/bin
+                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                source ~/.bashrc
                 kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
                 echo "Uploading Kubescape scan results to Azure Blob Storage"
                 az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
@@ -351,6 +432,55 @@ stages:
     jobs:
       - job: BuildAction
         steps:
+          - script: |
+              echo "Checking if OpenVAS is already running..."
+              cd /home/ubuntu/
+              if docker-compose ps --services --filter "status=running" | grep -q .; then
+                echo "OpenVAS containers are already running, skipping installation"
+              else
+                max_attempts=3
+                attempt=1
+                while [ $attempt -le $max_attempts ]; do
+                  echo "Starting OpenVAS (attempt $attempt/$max_attempts)..."
+                  
+                  # Use nohup to ensure the docker-compose command continues even if the shell exits
+                  nohup docker-compose up -d > openvas_startup.log 2>&1
+                  
+                  # Check if docker-compose started successfully
+                  if [ $? -eq 0 ]; then
+                    # Check if containers are actually running
+                    sleep 10
+                    running_containers=$(docker-compose ps --services --filter "status=running" | wc -l)
+                    
+                    if [ $running_containers -gt 0 ]; then
+                      echo "OpenVAS started successfully with $running_containers containers running"
+                      
+                      # Add error handling for the password setup
+                      echo "Setting OpenVAS admin password"
+                      if docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!; then
+                        echo "Password set successfully"
+                        break
+                      else
+                        echo "Failed to set password, but containers are running. Will retry..."
+                      fi
+                    else
+                      echo "Docker-compose started but no containers are running"
+                    fi
+                  fi
+                  
+                  echo "Failed to start OpenVAS properly, retrying in 30 seconds..."
+                  docker-compose down
+                  sleep 30
+                  attempt=$((attempt+1))
+                done
+                if [ $attempt -gt $max_attempts ]; then
+                  echo "Warning: Failed to start OpenVAS properly after $max_attempts attempts"
+                  echo "Continuing with installation. OpenVAS may need manual configuration later."
+                else
+                  echo "OpenVAS setup completed successfully"
+                fi
+              fi
+            displayName: 'Install OpenVAS'
           - script: |
               echo "Installing dependencies for Host Vulnerability Assessment"
               TARGET_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
@@ -418,7 +548,6 @@ stages:
               inlineScript: |
                 az storage blob upload-batch --source /home/ubuntu/cis_report/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Host Vulnerability Assessment and upload results'
-
 
 
   - stage: FinalResult

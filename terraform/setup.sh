@@ -28,103 +28,9 @@ az login --identity --username $MSI_ID &
   echo 'export PATH=$JAVA_HOME/bin:$PATH' >> ~/.bashrc
 ) &
 
-# Install trufflehog for secret scanning in parallel
-(
-  echo "Installing trufflehog3"
-  pip install trufflehog3 --quiet
-) &
-
-# Install dependency-check in parallel
-(
-  echo "Installing dependency-check"
-  cd /home/ubuntu/
-  wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
-  unzip -q -o dependency-check-7.4.0-release.zip
-  #rm -rf dependency-check-7.4.0-release.zip
-  chmod -R 775 dependency-check/bin/dependency-check.sh
-) &
-
-# Install SonarScanner in parallel
-(
-  echo "Installing SonarScanner"
-  cd /home/ubuntu/
-  wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-  unzip -q sonar-scanner-cli-5.0.1.3006-linux.zip
-  #rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
-  sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
-  chmod -R 775 /opt/sonar-scanner
-) &
-
-# Install Kubescape in parallel
-(
-  echo "Installing Kubescape"
-  cd /home/ubuntu/
-  curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-) &
-
-# Install Trivy in parallel
-(
-  echo "Installing Trivy"
-  curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
-) &
-
-# Install Azure DevOps agent in parallel
-(
-  echo "Installing Azure DevOps agent"
-  cd /home/ubuntu/
-  wget -q https://vstsagentpackage.azureedge.net/agent/4.252.0/vsts-agent-linux-x64-4.252.0.tar.gz
-  tar zxf vsts-agent-linux-x64-4.252.0.tar.gz
-) &
-
 # Wait for these parallel installations to complete
 echo "Waiting for tool installations to complete..."
 wait
-
-# Start OpenVAS with retry mechanism
-max_attempts=3
-attempt=1
-
-while [ $attempt -le $max_attempts ]; do
-  echo "Starting OpenVAS (attempt $attempt/$max_attempts)..."
-  
-  # Use nohup to ensure the docker-compose command continues even if the shell exits
-  cd /home/ubuntu/
-  nohup docker-compose up -d > openvas_startup.log 2>&1
-  
-  # Check if docker-compose started successfully
-  if [ $? -eq 0 ]; then
-    # Check if containers are actually running
-    sleep 10
-    running_containers=$(docker-compose ps --services --filter "status=running" | wc -l)
-    
-    if [ $running_containers -gt 0 ]; then
-      echo "OpenVAS started successfully with $running_containers containers running"
-      
-      # Add error handling for the password setup
-      echo "Setting OpenVAS admin password"
-      if docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!; then
-        echo "Password set successfully"
-        break
-      else
-        echo "Failed to set password, but containers are running. Will retry..."
-      fi
-    else
-      echo "Docker-compose started but no containers are running"
-    fi
-  fi
-  
-  echo "Failed to start OpenVAS properly, retrying in 30 seconds..."
-  docker-compose down
-  sleep 30
-  attempt=$((attempt+1))
-done
-
-if [ $attempt -gt $max_attempts ]; then
-  echo "Warning: Failed to start OpenVAS properly after $max_attempts attempts"
-  echo "Continuing with installation. OpenVAS may need manual configuration later."
-else
-  echo "OpenVAS setup completed successfully"
-fi
 
 # Set up key vault policy
 az keyvault set-policy --name $KEY_VAULT_NAME --spn $MSI_ID --secret-permissions get set
@@ -155,7 +61,7 @@ source ~/.bashrc
 # Configure Azure DevOps agent
 echo "Configuring Azure DevOps agent"
 cd /home/ubuntu
-bash config.sh --unattended --url https://dev.azure.com/Afour-technology --auth pat --token $pattoken --agent $HOSTNAME --pool default --acceptTeeEula
+bash config.sh --unattended --url https://dev.azure.com/Afour-technology --auth pat --token $pattoken --agent $HOSTNAME --pool default --replace --acceptTeeEula
 
 # Start the Azure DevOps agent
 sudo /home/ubuntu/svc.sh install
