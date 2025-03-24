@@ -422,6 +422,8 @@ stages:
                 pipx install prowler
                 prowler -v
                 pipx upgrade prowler
+                echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+                source ~/.bashrc
               fi
             displayName: 'Install dependencies'
 
@@ -432,6 +434,7 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 echo "Starting cloud scan"
+                export PATH=$HOME/.local/bin:$PATH
                 cd /home/ubuntu/
                 rm -rf /home/ubuntu/output/compliance/*
                 prowler azure --managed-identity-auth 
