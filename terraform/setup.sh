@@ -28,9 +28,19 @@ az login --identity --username $MSI_ID &
   echo 'export PATH=$JAVA_HOME/bin:$PATH' >> ~/.bashrc
 ) &
 
+
+# Install Azure DevOps agent in parallel
+(
+  echo "Installing Azure DevOps agent"
+  cd /home/ubuntu/
+  wget -q https://vstsagentpackage.azureedge.net/agent/4.252.0/vsts-agent-linux-x64-4.252.0.tar.gz
+  tar zxf vsts-agent-linux-x64-4.252.0.tar.gz
+) &
+
 # Wait for these parallel installations to complete
 echo "Waiting for tool installations to complete..."
 wait
+
 
 # Set up key vault policy
 az keyvault set-policy --name $KEY_VAULT_NAME --spn $MSI_ID --secret-permissions get set
