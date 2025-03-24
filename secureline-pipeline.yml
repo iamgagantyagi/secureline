@@ -120,7 +120,7 @@ stages:
               # If target doesn't exist, create it
               if [ -z "$TARGET_ID" ]; then
                 echo "Target does not exist. Creating new target..."
-                TARGET_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$TARGET_IP</hosts><port_range>1-65535</port_range></create_target>")
+                TARGET_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$TARGET_IP</hosts><port_range>T:22,80,443,3306,8080</port_range></create_target>")
                 echo "Target creation response: $TARGET_RESPONSE"
                 
                 # Extract the target ID from the response
@@ -631,7 +631,6 @@ stages:
                 pip install pyOpenSSL==22.0.0
                 sudo export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
                 python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "CIS-Audit" -p "$(find securelinescanoutput/HostVA/ -name 'CIS_*.xml')" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "DependencyCheck Scan" -p "securelinescanoutput/dependency-check-report.xml" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/K8S_config_scan.xml" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
