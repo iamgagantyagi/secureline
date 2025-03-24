@@ -51,9 +51,380 @@ stages:
           - script: echo "Source code has been checked out"
             displayName: 'Check out source code'
 
-  - stage: HostVulnerabilityAssessment
+  - stage: CI 
+    dependsOn: Initialize
     jobs:
-      - job: BuildAction
+      - job: SecretsScanner
+        steps:
+          - script: |
+              echo "Checking if trufflehog3 is already installed..."
+              if pip list 2>/dev/null | grep -q trufflehog3; then
+                echo "trufflehog3 is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Secret Scanning"
+                pip install trufflehog3
+              fi
+            displayName: 'Install Secret Scanning dependencies' 
+          - script: |
+              echo "Started scanning code repositories for vulnerabilities related to secret keys."
+              /home/ubuntu/.local/bin/trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
+              echo "Scanning completed."
+            displayName: 'Run Trufflehog3 Scan'
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Trufflehog3 Scan Results'
+
+          - script: |
+              echo "Sending SonarQube security findings to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(defectdojotoken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "tags=Secureline" \
+              -F "scan_type=Trufflehog3 Scan" \
+              -F "file=@truffelhog_output.json" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send Trufflehog3 Results to DefectDojo' 
+          
+      - job: SourceCompositionAnalysis
+        steps:
+          - script: |
+              echo "Checking if Dependency Check is already installed..."
+              if [ -d "/home/ubuntu/dependency-check" ] && [ -f "/home/ubuntu/dependency-check/bin/dependency-check.sh" ]; then
+                echo "Dependency Check is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Source Composition Analysis"
+                cd /home/ubuntu/
+                rm -rf dependency-check
+                wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
+                unzip -o dependency-check-7.4.0-release.zip
+                rm -rf dependency-check-7.4.0-release.zip
+                chmod -R 775 dependency-check/bin/dependency-check.sh
+                echo 'export PATH=/home/ubuntu/dependency-check/bin:$PATH' >> ~/.bashrc
+                source ~/.bashrc 
+              fi
+            displayName: 'Install Source Composition Analysis dependencies'
+          - script: |
+              export PATH=/home/ubuntu/dependency-check/bin:$PATH
+              echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
+              git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
+              dependency-check.sh -o '/home/ubuntu/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
+              echo "Scanning completed."
+            displayName: 'Run Dependency Check'  
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file /home/ubuntu/dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Dependency Check Results'
+
+          - script: |
+              echo "Sending SonarQube security findings to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(defectdojotoken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "tags=Secureline" \
+              -F "scan_type=Dependency Check Scan" \
+              -F "file=@dependency-check-report.xml;type=text/xml" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send SCA result to DefectDojo' 
+
+      - job: StaticApplicationSecurityTesting
+        steps:
+          - script: |
+              echo "Checking if Sonar Scanner is already installed..."
+              if [ -d "/opt/sonar-scanner" ] && [ -f "/opt/sonar-scanner/bin/sonar-scanner" ]; then
+                echo "Sonar Scanner is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Static Application Security Testing (SAST)"
+                cd /home/ubuntu/
+                # Check if maven is installed
+                if ! command -v mvn &> /dev/null; then
+                  sudo apt install -y maven
+                else
+                  echo "Maven is already installed, skipping installation"
+                fi
+                
+                rm -rf sonar-scanner-5.0.1.3006-linux
+                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+                unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+                rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
+                sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+                chmod -R 775 /opt/sonar-scanner
+              fi
+            displayName: 'Install SAST dependencies'
+
+          - script: |
+              echo "Cloning the repository"
+              git clone https://github.com/iamgagantyagi/WebGoat.git
+              sudo apt install maven -y
+            displayName: 'Clone Repository'
+
+          - script: |
+              echo "Started scanning for Static Application Security Testing (SAST)"
+              cd $HOME/WebGoat
+              git init
+              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine"
+              echo "Scanning completed."
+              echo "Generating SonarQube report..."
+              cd /home/ubuntu/
+              curl -u "$(Sonartoken):" "http://$(DefectDojoDomain):30000/api/issues/search?componentKeys=securityproject" -o sonar-report.json
+            displayName: 'Run SonarQube and store Scan'
+
+          - script: |
+              echo "Sending SonarQube security findings to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(defectdojotoken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "tags=Secureline" \
+              -F "scan_type=SonarQube API Import" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send SonarQube Results to DefectDojo'
+            condition: 
+          - script: |
+               cd $HOME/WebGoat
+               sudo mvn -N io.takari:maven:wrapper
+               sudo chmod +x mvnw
+               sudo mvn clean install -DskipTests
+            displayName: CleanUp    
+
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file /home/ubuntu/sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload SonarQube Scan Results' 
+
+      - job: ContainersConfigurationScan
+        steps:
+          - script: |
+              echo "Checking if Kubescape is already installed..."
+              if command -v kubescape &> /dev/null; then
+                echo "Kubescape is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Containers Configuration Scan"
+                cd /home/ubuntu/
+                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                source ~/.bashrc
+              fi
+            displayName: 'Install Container Scanning dependencies'
+          - script: |
+              echo "Scanning YAML for application"
+              export PATH=$PATH:$HOME/.kubescape/bin
+              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
+              echo "Scanning completed."
+            displayName: 'Run Kubescape Scan'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |  
+                az storage blob upload --file /home/ubuntu/K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Kubescape Scan Results'       
+
+      - job: GenerateBuild
+        steps:
+          - script: |
+              echo "Executing build commands"
+              cd /home/ubuntu/WebGoat
+              git checkout main
+              sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
+              sudo ./mvnw clean install
+              sudo docker build -f Dockerfile . -t webgoat/webgoat
+              sudo docker tag webgoat/webgoat:latest gtyagi017/webgoat:latest
+              sudo docker push gtyagi017/webgoat:latest
+              echo "WebGoat Docker image pushed successfully on Docker Hub"
+            displayName: 'Build and Push Docker Image' 
+
+      - job: TrivyDockerImageScan
+        dependsOn: GenerateBuild
+        steps:
+          - script: |
+              echo "Checking if trivy is already installed..."
+              if command -v trivy &> /dev/null; then
+                echo "trivy is already installed, skipping installation"
+              else
+                cd /home/ubuntu/
+                echo "Installing Trivy"
+                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
+                echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+                source ~/.bashrc
+              fi  
+            displayName: 'Install Trivy'
+          - script: |
+              export PATH=$HOME/.local/bin:$PATH
+              echo "Scanning Docker image"
+              cd /home/ubuntu/
+              trivy image -f json -o /home/ubuntu/Trivy_result.json gtyagi017/webgoat:latest
+              echo "Scanning completed."
+            displayName: 'Run Trivy Scan'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |  
+                az storage blob upload --file /home/ubuntu/Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload Trivy Scan Results'
+
+  - stage: DeployApplication
+    dependsOn: CI
+    jobs:
+      - job: Deploy
+        steps:
+          - script: |
+              echo "Deploying Application on Kubernetes"
+              kubectl apply -f /home/ubuntu/WebGoat/webgoat_K8S.yml
+              echo "Deployment completed."
+            displayName: 'Deploy Application' 
+      
+  - stage: CD
+    dependsOn: DeployApplication
+    jobs:
+      - job: DynamicApplicationSecurityTesting
+        steps:
+          - script: |
+              echo "Running ZAP docker container and scanning full Scan"
+              mkdir /home/ubuntu/zapmount
+              chmod -R 777 /home/ubuntu/zapmount
+              sudo docker run --rm -v /home/ubuntu/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x /zap/wrk/zap_report.xml || true
+              echo "Scanning completed."
+            displayName: 'Run ZAP Scan'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az storage blob upload --file /home/ubuntu/zapmount/zap_report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Upload ZAP Scan Results'
+
+          - script: |
+              echo "Sending zap report to DefectDojo"
+              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
+              -H "accept: application/json" \
+              -H "Authorization: Token $(defectdojotoken)" \
+              -H "Content-Type: multipart/form-data" \
+              -F "active=true" \
+              -F "verified=true" \
+              -F "close_old_findings=false" \
+              -F "test_title=Secureline" \
+              -F "push_to_jira=false" \
+              -F "minimum_severity=Info" \
+              -F "close_old_findings_product_scope=false" \
+              -F "scan_date=$(date +%F)" \
+              -F "create_finding_groups_for_all_findings=true" \
+              -F "product_name=Secureline" \
+              -F "tags=zap_report" \
+              -F "scan_type=ZAP Scan" \
+              -F "file=@$(pwd)/zapmount/zap_report" \
+              -F "engagement=1"
+              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
+            displayName: 'Send SonarQube Results to DefectDojo' 
+
+      - job: ContainerScan
+        steps:
+          - script: |
+              echo "Checking if Kubescape is already installed..."
+              if command -v kubescape &> /dev/null; then
+                echo "Kubescape is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Containers Configuration Scan"
+                cd /home/ubuntu/
+                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                source ~/.bashrc
+              fi
+            displayName: 'Install Container Scanning dependencies'
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "kubescape scanning application namespace"
+                export PATH=$PATH:$HOME/.kubescape/bin
+                kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
+                echo "Uploading Kubescape scan results to Azure Blob Storage"
+                az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Run Container Scan and upload results'
+
+      - job: CloudScan
+        steps:
+          - script: |
+              echo "Installing dependencies for Cloud Scan"
+              if command -v prowler &> /dev/null; then
+                echo "prowler is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Containers Configuration Scan"
+                sudo apt-get install -y pipx
+                pipx install prowler
+                prowler -v
+                pipx upgrade prowler
+              fi
+            displayName: 'Install dependencies'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Starting cloud scan"
+                cd /home/ubuntu/
+                rm -rf /home/ubuntu/output/compliance/*
+                prowler azure --managed-identity-auth 
+                az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/cloudscan/ --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Run Cloud Scan and upload results'                      
+
+      - job: HostVulnerabilityAssessment
         steps:
           - script: |
               echo "Checking if OpenVAS is already running..."
@@ -199,9 +570,8 @@ stages:
               
               # Generate XML report instead of PDF
               echo "Generating XML vulnerability report..."
-              sudo docker exec -u $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
-              grep -oP '(?<=</report_format>)[^<]+' | \
-              base64 -d > /home/ubuntu/CIS_Audit.xml
+              sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
+              grep -oP '(?<=</report_format>)[^<]+' | base64 -d > /home/ubuntu/CIS_Audit.xml
               
               # Check if report was generated
               if [ -f /home/ubuntu/CIS_Audit.xml ]; then
@@ -212,399 +582,17 @@ stages:
               fi
 
             displayName: 'Run Host Vulnerability Assessment'
-
-  - stage: SecretsScanner
-    dependsOn: Initialize
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if trufflehog3 is already installed..."
-              if pip list 2>/dev/null | grep -q trufflehog3; then
-                echo "trufflehog3 is already installed, skipping installation"
-              else
-                echo "Installing dependencies for Secret Scanning"
-                pip install trufflehog3
-              fi
-            displayName: 'Install Secret Scanning dependencies' 
-          - script: |
-              echo "Started scanning code repositories for vulnerabilities related to secret keys."
-              /home/ubuntu/.local/bin/trufflehog3 $(GitHubRepoURL) --no-history -f json -o truffelhog_output.json || true
-              echo "Scanning completed."
-            displayName: 'Run Trufflehog3 Scan'
           - task: AzureCLI@2
             inputs:
               azureSubscription: 'secureline'
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload --file truffelhog_output.json --container-name $(ArtifactContainerName) --name securelinescanoutput/truffelhog_output.json --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload Trufflehog3 Scan Results'
-
-          - script: |
-              echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
-              -H "accept: application/json" \
-              -H "Authorization: Token $(defectdojotoken)" \
-              -H "Content-Type: multipart/form-data" \
-              -F "active=true" \
-              -F "verified=true" \
-              -F "close_old_findings=false" \
-              -F "test_title=Secureline" \
-              -F "push_to_jira=false" \
-              -F "minimum_severity=Info" \
-              -F "close_old_findings_product_scope=false" \
-              -F "scan_date=$(date +%F)" \
-              -F "create_finding_groups_for_all_findings=true" \
-              -F "tags=Secureline" \
-              -F "scan_type=Trufflehog3 Scan" \
-              -F "file=@truffelhog_output.json" \
-              -F "engagement=1"
-              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
-            displayName: 'Send Trufflehog3 Results to DefectDojo' 
-
-  - stage: SourceCompositionAnalysis
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if Dependency Check is already installed..."
-              if [ -d "/home/ubuntu/dependency-check" ] && [ -f "/home/ubuntu/dependency-check/bin/dependency-check.sh" ]; then
-                echo "Dependency Check is already installed, skipping installation"
-              else
-                echo "Installing dependencies for Source Composition Analysis"
-                cd /home/ubuntu/
-                rm -rf dependency-check
-                wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
-                unzip -o dependency-check-7.4.0-release.zip
-                rm -rf dependency-check-7.4.0-release.zip
-                chmod -R 775 dependency-check/bin/dependency-check.sh
-                echo 'export PATH=/home/ubuntu/dependency-check/bin:$PATH' >> ~/.bashrc
-                source ~/.bashrc 
-              fi
-            displayName: 'Install Source Composition Analysis dependencies'
-          - script: |
-              export PATH=/home/ubuntu/dependency-check/bin:$PATH
-              echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
-              git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
-              dependency-check.sh -o '/home/ubuntu/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
-              echo "Scanning completed."
-            displayName: 'Run Dependency Check'  
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az storage blob upload --file /home/ubuntu/dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload Dependency Check Results'
-
-          - script: |
-              echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
-              -H "accept: application/json" \
-              -H "Authorization: Token $(defectdojotoken)" \
-              -H "Content-Type: multipart/form-data" \
-              -F "active=true" \
-              -F "verified=true" \
-              -F "close_old_findings=false" \
-              -F "test_title=Secureline" \
-              -F "push_to_jira=false" \
-              -F "minimum_severity=Info" \
-              -F "close_old_findings_product_scope=false" \
-              -F "scan_date=$(date +%F)" \
-              -F "create_finding_groups_for_all_findings=true" \
-              -F "tags=Secureline" \
-              -F "scan_type=Dependency Check Scan" \
-              -F "file=@dependency-check-report.xml;type=text/xml" \
-              -F "engagement=1"
-              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
-            displayName: 'Send SCA result to DefectDojo'             
-        
- 
-
-  - stage: StaticApplicationSecurityTesting
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if Sonar Scanner is already installed..."
-              if [ -d "/opt/sonar-scanner" ] && [ -f "/opt/sonar-scanner/bin/sonar-scanner" ]; then
-                echo "Sonar Scanner is already installed, skipping installation"
-              else
-                echo "Installing dependencies for Static Application Security Testing (SAST)"
-                cd /home/ubuntu/
-                # Check if maven is installed
-                if ! command -v mvn &> /dev/null; then
-                  sudo apt install -y maven
-                else
-                  echo "Maven is already installed, skipping installation"
-                fi
-                
-                rm -rf sonar-scanner-5.0.1.3006-linux
-                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-                unzip sonar-scanner-cli-5.0.1.3006-linux.zip
-                rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
-                sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
-                chmod -R 775 /opt/sonar-scanner
-              fi
-            displayName: 'Install SAST dependencies'
-
-          - script: |
-              echo "Cloning the repository"
-              git clone https://github.com/iamgagantyagi/WebGoat.git
-              sudo apt install maven -y
-            displayName: 'Clone Repository'
-
-          - script: |
-              echo "Started scanning for Static Application Security Testing (SAST)"
-              cd $HOME/WebGoat
-              git init
-              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine"
-              echo "Scanning completed."
-              echo "Generating SonarQube report..."
-              cd /home/ubuntu/
-              curl -u "$(Sonartoken):" "http://$(DefectDojoDomain):30000/api/issues/search?componentKeys=securityproject" -o sonar-report.json
-            displayName: 'Run SonarQube and store Scan'
-
-          - script: |
-              echo "Sending SonarQube security findings to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
-              -H "accept: application/json" \
-              -H "Authorization: Token $(defectdojotoken)" \
-              -H "Content-Type: multipart/form-data" \
-              -F "active=true" \
-              -F "verified=true" \
-              -F "close_old_findings=false" \
-              -F "test_title=Secureline" \
-              -F "push_to_jira=false" \
-              -F "minimum_severity=Info" \
-              -F "close_old_findings_product_scope=false" \
-              -F "scan_date=$(date +%F)" \
-              -F "create_finding_groups_for_all_findings=true" \
-              -F "tags=Secureline" \
-              -F "scan_type=SonarQube API Import" \
-              -F "engagement=1"
-              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
-            displayName: 'Send SonarQube Results to DefectDojo'
-            condition: 
-          - script: |
-               cd $HOME/WebGoat
-               sudo mvn -N io.takari:maven:wrapper
-               sudo chmod +x mvnw
-               sudo mvn clean install -DskipTests
-            displayName: CleanUp    
-
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az storage blob upload --file /home/ubuntu/sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload SonarQube Scan Results'
-
-  - stage: ContainersConfigurationScan
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if Kubescape is already installed..."
-              if command -v kubescape &> /dev/null; then
-                echo "Kubescape is already installed, skipping installation"
-              else
-                echo "Installing dependencies for Containers Configuration Scan"
-                cd /home/ubuntu/
-                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
-                source ~/.bashrc
-              fi
-            displayName: 'Install Container Scanning dependencies'
-          - script: |
-              echo "Scanning YAML for application"
-              export PATH=$PATH:$HOME/.kubescape/bin
-              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
-              echo "Scanning completed."
-            displayName: 'Run Kubescape Scan'
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |  
-                az storage blob upload --file /home/ubuntu/K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload Kubescape Scan Results'
-
-  - stage: GenerateBuild
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Executing build commands"
-              cd /home/ubuntu/WebGoat
-              git checkout main
-              sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
-              sudo ./mvnw clean install
-              sudo docker build -f Dockerfile . -t webgoat/webgoat
-              sudo docker tag webgoat/webgoat:latest gtyagi017/webgoat:latest
-              sudo docker push gtyagi017/webgoat:latest
-              echo "WebGoat Docker image pushed successfully on Docker Hub"
-            displayName: 'Build and Push Docker Image'
-
-  - stage: TrivyDockerImageScan
-    dependsOn: GenerateBuild
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if trivy is already installed..."
-              if command -v trivy &> /dev/null; then
-                echo "trivy is already installed, skipping installation"
-              else
-                cd /home/ubuntu/
-                echo "Installing Trivy"
-                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
-                echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
-                source ~/.bashrc
-              fi
-              
-            displayName: 'Install Trivy'
-          - script: |
-              export PATH=$HOME/.local/bin:$PATH
-              echo "Scanning Docker image"
-              cd /home/ubuntu/
-              trivy image -f json -o /home/ubuntu/Trivy_result.json gtyagi017/webgoat:latest
-              echo "Scanning completed."
-            displayName: 'Run Trivy Scan'
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |  
-                az storage blob upload --file /home/ubuntu/Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload Trivy Scan Results'
-
-  - stage: DeployApplication
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Deploying Application on Kubernetes"
-              kubectl apply -f /home/ubuntu/WebGoat/webgoat_K8S.yml
-              echo "Deployment completed."
-            displayName: 'Deploy Application'
-
-  - stage: DynamicApplicationSecurityTesting
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Running ZAP docker container and scanning full Scan"
-              mkdir /home/ubuntu/zapmount
-              chmod -R 777 /home/ubuntu/zapmount
-              sudo docker run --rm -v /home/ubuntu/zapmount:/zap/wrk/:rw -t softwaresecurityproject/zap-stable zap-full-scan.py -t http://$(DefectDojoDomain):30002/WebGoat -x /zap/wrk/zap_report.xml || true
-              echo "Scanning completed."
-            displayName: 'Run ZAP Scan'
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az storage blob upload --file /home/ubuntu/zapmount/zap_report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/zap_report --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload ZAP Scan Results'
-
-          - script: |
-              echo "Sending zap report to DefectDojo"
-              curl -X POST "http://$(DefectDojoDomain):30001/api/v2/import-scan/" \
-              -H "accept: application/json" \
-              -H "Authorization: Token $(defectdojotoken)" \
-              -H "Content-Type: multipart/form-data" \
-              -F "active=true" \
-              -F "verified=true" \
-              -F "close_old_findings=false" \
-              -F "test_title=Secureline" \
-              -F "push_to_jira=false" \
-              -F "minimum_severity=Info" \
-              -F "close_old_findings_product_scope=false" \
-              -F "scan_date=$(date +%F)" \
-              -F "create_finding_groups_for_all_findings=true" \
-              -F "product_name=Secureline" \
-              -F "tags=zap_report" \
-              -F "scan_type=ZAP Scan" \
-              -F "file=@$(pwd)/zapmount/zap_report" \
-              -F "engagement=1"
-              if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
-            displayName: 'Send SonarQube Results to DefectDojo'
-
-  - stage: ContainerScan
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if Kubescape is already installed..."
-              if command -v kubescape &> /dev/null; then
-                echo "Kubescape is already installed, skipping installation"
-              else
-                echo "Installing dependencies for Containers Configuration Scan"
-                cd /home/ubuntu/
-                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
-                source ~/.bashrc
-              fi
-            displayName: 'Install Container Scanning dependencies'
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                echo "kubescape scanning application namespace"
-                export PATH=$PATH:$HOME/.kubescape/bin
-                kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
-                echo "Uploading Kubescape scan results to Azure Blob Storage"
-                az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Run Container Scan and upload results'   
-
-  - stage: CloudScan
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Installing dependencies for Cloud Scan"
-              sudo echo dckr_pat_n75Bge8xlnU_sJh8b3m6GgR_cg8 | sudo docker login --username gtyagi017 --password-stdin
-            displayName: 'Install dependencies'
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                echo "Starting cloud scan"
-                mkdir -p /home/ubuntu/report/
-                docker run --memory="2.5g" -v /home/ubuntu/reports:/app/reports securityftw/cs-suite -env azure
-                az storage blob upload-batch --source /home/ubuntu/reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Run Cloud Scan and upload results'       
-
-
-
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                az storage blob upload-batch --source /home/ubuntu/cis_report/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
-            displayName: 'Upload results to azure'
-
+                az storage blob upload-batch --source /home/ubuntu/CIS_Audit.xml --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+            displayName: 'Host Vulnerability upload results'
 
   - stage: FinalResult
+    dependsOn: CD
     jobs:
       - job: BuildAction
         steps:
