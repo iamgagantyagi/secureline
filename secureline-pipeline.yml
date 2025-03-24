@@ -51,7 +51,7 @@ stages:
           - script: echo "Source code has been checked out"
             displayName: 'Check out source code'
 
-  - stage: CI 
+  - stage: SecretsScanner
     dependsOn: Initialize
     jobs:
       - job: SecretsScanner
@@ -101,6 +101,8 @@ stages:
               if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
             displayName: 'Send Trufflehog3 Results to DefectDojo' 
           
+  - stage: SourceCompositionAnalysis
+    jobs:
       - job: SourceCompositionAnalysis
         steps:
           - script: |
@@ -157,6 +159,8 @@ stages:
               if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
             displayName: 'Send SCA result to DefectDojo' 
 
+  - stage: StaticApplicationSecurityTesting
+    jobs:
       - job: StaticApplicationSecurityTesting
         steps:
           - script: |
@@ -237,6 +241,8 @@ stages:
                 az storage blob upload --file /home/ubuntu/sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload SonarQube Scan Results' 
 
+  - stage: ContainersConfigurationScan
+    jobs:
       - job: ContainersConfigurationScan
         steps:
           - script: |
@@ -267,7 +273,9 @@ stages:
                 az storage blob upload --file /home/ubuntu/K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Kubescape Scan Results'       
 
-      - job: GenerateBuild
+  - stage: BuildAndPushDockerImage
+    jobs:
+      - job: BuildAndPushDockerImage
         steps:
           - script: |
               echo "Executing build commands"
@@ -281,8 +289,10 @@ stages:
               echo "WebGoat Docker image pushed successfully on Docker Hub"
             displayName: 'Build and Push Docker Image' 
 
+  - stage: TrivyDockerImageScan
+    dependsOn: BuildAndPushDockerImage
+    jobs:
       - job: TrivyDockerImageScan
-        dependsOn: GenerateBuild
         steps:
           - script: |
               echo "Checking if trivy is already installed..."
@@ -314,7 +324,7 @@ stages:
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
-    dependsOn: CI
+    dependsOn: TrivyDockerImageScan
     jobs:
       - job: Deploy
         steps:
@@ -324,7 +334,7 @@ stages:
               echo "Deployment completed."
             displayName: 'Deploy Application' 
       
-  - stage: CD
+  - stage: DynamicApplicationSecurityTesting
     dependsOn: DeployApplication
     jobs:
       - job: DynamicApplicationSecurityTesting
@@ -369,6 +379,8 @@ stages:
               if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
             displayName: 'Send SonarQube Results to DefectDojo' 
 
+  - stage: ContainerScan
+    jobs:
       - job: ContainerScan
         steps:
           - script: |
@@ -396,6 +408,8 @@ stages:
                 az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Container Scan and upload results'
 
+  - stage: CloudScan
+    jobs:
       - job: CloudScan
         steps:
           - script: |
@@ -424,6 +438,8 @@ stages:
                 az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/cloudscan/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'                      
 
+  - stage: HostVulnerabilityAssessment
+    jobs:
       - job: HostVulnerabilityAssessment
         steps:
           - script: |
@@ -592,7 +608,7 @@ stages:
             displayName: 'Host Vulnerability upload results'
 
   - stage: FinalResult
-    dependsOn: CD
+    dependsOn: HostVulnerabilityAssessment
     jobs:
       - job: BuildAction
         steps:
