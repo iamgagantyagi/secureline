@@ -51,7 +51,118 @@ stages:
           - script: echo "Source code has been checked out"
             displayName: 'Check out source code'
 
-        
+  - stage: HostVulnerabilityAssessment
+    jobs:
+      - job: BuildAction
+        steps:
+          - script: |
+              echo "Checking if OpenVAS is already running..."
+              cd /home/ubuntu/
+              if docker-compose ps --services --filter "status=running" | grep -q .; then
+                echo "OpenVAS containers are already running, skipping installation"
+              else
+                max_attempts=3
+                attempt=1
+                while [ $attempt -le $max_attempts ]; do
+                  echo "Starting OpenVAS (attempt $attempt/$max_attempts)..."
+                  
+                  # Use nohup to ensure the docker-compose command continues even if the shell exits
+                  nohup docker-compose up -d > openvas_startup.log 2>&1
+                  
+                  # Check if docker-compose started successfully
+                  if [ $? -eq 0 ]; then
+                    # Check if containers are actually running
+                    sleep 10
+                    running_containers=$(docker-compose ps --services --filter "status=running" | wc -l)
+                    
+                    if [ $running_containers -gt 0 ]; then
+                      echo "OpenVAS started successfully with $running_containers containers running"
+                      
+                      # Add error handling for the password setup
+                      echo "Setting OpenVAS admin password"
+                      if docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!; then
+                        echo "Password set successfully"
+                        break
+                      else
+                        echo "Failed to set password, but containers are running. Will retry..."
+                      fi
+                    else
+                      echo "Docker-compose started but no containers are running"
+                    fi
+                  fi
+                  
+                  echo "Failed to start OpenVAS properly, retrying in 30 seconds..."
+                  docker-compose down
+                  sleep 30
+                  attempt=$((attempt+1))
+                done
+                if [ $attempt -gt $max_attempts ]; then
+                  echo "Warning: Failed to start OpenVAS properly after $max_attempts attempts"
+                  echo "Continuing with installation. OpenVAS may need manual configuration later."
+                else
+                  echo "OpenVAS setup completed successfully"
+                fi
+              fi
+            displayName: 'Install OpenVAS'
+          - script: |
+              echo "Installing dependencies for Host Vulnerability Assessment"
+              TARGET_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+              DOCKER_CONTAINER_ID=$(sudo docker ps --filter "name=gvm-tools" --format "{{.ID}}")
+
+              echo "Creating target and initiating scan..."
+              # Check if target exists or create it
+              TARGET_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$TARGET_IP</hosts><port_range>1-65535</port_range></create_target>")
+              
+              if [[ "$TARGET_RESPONSE" == *"Target exists already"* ]]; then
+                TARGET_ID=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
+              else
+                TARGET_ID=$(echo '$TARGET_RESPONSE' | xmlstarlet sel -t -m "//create_target_response" -v "@id" -n)
+              fi
+              
+              # Create and start task in one step
+              TASK_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><config id='08b69003-5fc2-4037-a479-93b440211c73'/><scanner id='daba56c8-73ec-11df-a475-002264764cea'/></create_task>")
+              TASK_ID=$(echo '$TASK_RESPONSE' | xmlstarlet sel -t -m "//create_task_response" -v "@id" -n)
+              
+              # Start the scan
+              sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID' />"
+              
+              # Monitor scan with simplified polling
+              TIMEOUT=$(( $(date +%s) + $(SCAN_TIMEOUT) ))
+              while [ $(date +%s) -lt $TIMEOUT ]; do
+                SCAN_STATUS=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks task_id='$TASK_ID'/>")
+                
+                if [[ "$SCAN_STATUS" == *"<status>Done</status>"* ]]; then
+                  REPORT_ID=$(echo "$SCAN_STATUS" | xmlstarlet sel -t -m "//report" -v "@id" -n)
+                  echo "Scan completed. Report ID: $REPORT_ID"
+                  break
+                fi
+                
+                echo "Scan in progress... ($(( $TIMEOUT - $(date +%s) )) seconds remaining)"
+                sleep 30
+              done
+              
+              # Check if we timed out
+              if [[ -z "$REPORT_ID" ]]; then
+                echo "##vso[task.logissue type=error]Scan timed out"
+                exit 1
+              fi
+              
+              # Generate XML report instead of PDF
+              echo "Generating XML vulnerability report..."
+              sudo docker exec -u $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
+              grep -oP '(?<=</report_format>)[^<]+' | \
+              base64 -d > /home/ubuntu/CIS_Audit.xml
+              
+              # Check if report was generated
+              if [ -f /home/ubuntu/CIS_Audit.xml ]; then
+                echo "XML report generated successfully"
+              else
+                echo "Report generation failed"
+                exit 1
+              fi
+
+            displayName: 'Run Host Vulnerability Assessment'
+
   - stage: SecretsScanner
     dependsOn: Initialize
     jobs:
@@ -431,117 +542,7 @@ stages:
                 az storage blob upload-batch --source /home/ubuntu/reports/ --destination $(ArtifactContainerName)/CloudScan/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'       
 
-  - stage: HostVulnerabilityAssessment
-    jobs:
-      - job: BuildAction
-        steps:
-          - script: |
-              echo "Checking if OpenVAS is already running..."
-              cd /home/ubuntu/
-              if docker-compose ps --services --filter "status=running" | grep -q .; then
-                echo "OpenVAS containers are already running, skipping installation"
-              else
-                max_attempts=3
-                attempt=1
-                while [ $attempt -le $max_attempts ]; do
-                  echo "Starting OpenVAS (attempt $attempt/$max_attempts)..."
-                  
-                  # Use nohup to ensure the docker-compose command continues even if the shell exits
-                  nohup docker-compose up -d > openvas_startup.log 2>&1
-                  
-                  # Check if docker-compose started successfully
-                  if [ $? -eq 0 ]; then
-                    # Check if containers are actually running
-                    sleep 10
-                    running_containers=$(docker-compose ps --services --filter "status=running" | wc -l)
-                    
-                    if [ $running_containers -gt 0 ]; then
-                      echo "OpenVAS started successfully with $running_containers containers running"
-                      
-                      # Add error handling for the password setup
-                      echo "Setting OpenVAS admin password"
-                      if docker compose exec --user=gvmd gvmd gvmd --user=admin --new-password=Admin1234!; then
-                        echo "Password set successfully"
-                        break
-                      else
-                        echo "Failed to set password, but containers are running. Will retry..."
-                      fi
-                    else
-                      echo "Docker-compose started but no containers are running"
-                    fi
-                  fi
-                  
-                  echo "Failed to start OpenVAS properly, retrying in 30 seconds..."
-                  docker-compose down
-                  sleep 30
-                  attempt=$((attempt+1))
-                done
-                if [ $attempt -gt $max_attempts ]; then
-                  echo "Warning: Failed to start OpenVAS properly after $max_attempts attempts"
-                  echo "Continuing with installation. OpenVAS may need manual configuration later."
-                else
-                  echo "OpenVAS setup completed successfully"
-                fi
-              fi
-            displayName: 'Install OpenVAS'
-          - script: |
-              echo "Installing dependencies for Host Vulnerability Assessment"
-              TARGET_IP=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-              DOCKER_CONTAINER_ID=$(sudo docker ps --filter "name=gvm-tools" --format "{{.ID}}")
 
-              echo "Creating target and initiating scan..."
-              # Check if target exists or create it
-              TARGET_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_target><name>$(TARGET_NAME)</name><hosts>$TARGET_IP</hosts><port_range>1-65535</port_range></create_target>")
-              
-              if [[ "$TARGET_RESPONSE" == *"Target exists already"* ]]; then
-                TARGET_ID=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_targets/>" | xmlstarlet sel -t -m "//target[name='$(TARGET_NAME)']" -v "@id" -n)
-              else
-                TARGET_ID=$(echo "$TARGET_RESPONSE" | xmlstarlet sel -t -m "//create_target_response" -v "@id" -n)
-              fi
-              
-              # Create and start task in one step
-              TASK_RESPONSE=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<create_task><name>$(TASK_NAME)</name><target id='$TARGET_ID'/><scanner id='08b69003-5fc2-4037-a479-93b440211c73'/><config id='daba56c8-73ec-11df-a475-002264764cea'/></create_task>")
-              TASK_ID=$(echo "$TASK_RESPONSE" | xmlstarlet sel -t -m "//create_task_response" -v "@id" -n)
-              
-              # Start the scan
-              sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<start_task task_id='$TASK_ID' />"
-              
-              # Monitor scan with simplified polling
-              TIMEOUT=$(( $(date +%s) + $(SCAN_TIMEOUT) ))
-              while [ $(date +%s) -lt $TIMEOUT ]; do
-                SCAN_STATUS=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks task_id='$TASK_ID'/>")
-                
-                if [[ "$SCAN_STATUS" == *"<status>Done</status>"* ]]; then
-                  REPORT_ID=$(echo "$SCAN_STATUS" | xmlstarlet sel -t -m "//report" -v "@id" -n)
-                  echo "Scan completed. Report ID: $REPORT_ID"
-                  break
-                fi
-                
-                echo "Scan in progress... ($(( $TIMEOUT - $(date +%s) )) seconds remaining)"
-                sleep 30
-              done
-              
-              # Check if we timed out
-              if [[ -z "$REPORT_ID" ]]; then
-                echo "##vso[task.logissue type=error]Scan timed out"
-                exit 1
-              fi
-              
-              # Generate XML report instead of PDF
-              echo "Generating XML vulnerability report..."
-              sudo docker exec -u $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
-              grep -oP '(?<=</report_format>)[^<]+' | \
-              base64 -d > /home/ubuntu/CIS_Audit.xml
-              
-              # Check if report was generated
-              if [ -f /home/ubuntu/CIS_Audit.xml ]; then
-                echo "XML report generated successfully"
-              else
-                echo "Report generation failed"
-                exit 1
-              fi
-
-            displayName: 'Run Host Vulnerability Assessment'
 
           - task: AzureCLI@2
             inputs:
