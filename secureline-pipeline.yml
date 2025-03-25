@@ -195,7 +195,7 @@ stages:
           - script: |
               echo "Started scanning for Static Application Security Testing (SAST)"
               cd $HOME/WebGoat
-              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine" -e
+              sudo mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine" -e
               echo "Scanning completed."
               echo "Generating SonarQube report..."
               cd /home/ubuntu/
@@ -427,9 +427,33 @@ stages:
                 echo "Starting cloud scan"
                 export PATH=$HOME/.local/bin:$PATH
                 cd /home/ubuntu/
-                rm -rf /home/ubuntu/output/compliance/*
+                rm -rf /home/ubuntu/output/
                 prowler azure --managed-identity-auth 
-                az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/cloudscan/ --account-name $(ArtifactStorageAccount) --overwrite
+                # Check if compliance directory exists
+                if [ -d "/home/ubuntu/output/compliance/" ] && [ "$(ls -A /home/ubuntu/output/compliance/)" ]; then
+                    # Navigate to the compliance directory
+                    cd /home/ubuntu/output/compliance/
+
+                    # Rename all files to remove the unique ID
+                    for file in prowler-output-*-*-*-*-*_*.csv; do
+                        # Use parameter expansion to remove the ID part
+                        new_filename=$(echo "$file" | sed -E 's/prowler-output-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9]{14}_/prowler-output_/')
+                        
+                        # Rename the file
+                        mv "$file" "$new_filename"
+                    done
+
+                    # Upload all renamed files
+                    az storage blob upload-batch \
+                        --source /home/ubuntu/output/compliance/ \
+                        --destination "$(ArtifactContainerName)/securelinescanoutput/cloudscan/" \
+                        --account-name "$(ArtifactStorageAccount)" \
+                        --overwrite
+                else
+                    echo "No scan reports found"
+                    exit 1
+                fi
+                az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/securelinescanoutput/cloudscan/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'                      
 
   - stage: HostVulnerabilityAssessment
@@ -599,7 +623,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload-batch --source /home/ubuntu/HostVA/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload-batch --source /home/ubuntu/HostVA/ --destination $(ArtifactContainerName)/securelinescanoutput/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Host Vulnerability upload results'
 
   - stage: FinalResult
@@ -617,7 +641,7 @@ stages:
                 sudo apt-get install python3-dateutil python3-html2text -y
                 cd /home/ubuntu/
                 git clone https://github.com/iamgagantyagi/securelineparser.git
-                az storage blob download-batch --source $(ArtifactContainerName)/ --destination /home/ubuntu/securelineparser/ --account-name $(ArtifactStorageAccount)
+                az storage blob download-batch --source $(ArtifactContainerName) --destination /home/ubuntu/securelineparser/ --account-name $(ArtifactStorageAccount)
             displayName: 'Install dependencies and download artifacts'
           - task: AzureCLI@2
             inputs:
