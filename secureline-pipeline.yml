@@ -194,6 +194,7 @@ stages:
 
           - script: |
               echo "Started scanning for Static Application Security Testing (SAST)"
+              sudo rm -rf $HOME/WebGoat/target
               mkdir -p $HOME/WebGoat/target/sonar
               chmod -R 755 $HOME/WebGoat/target/sonar
               cd $HOME/WebGoat
@@ -591,6 +592,7 @@ stages:
               
               # Generate XML report instead of PDF
               echo "Generating XML vulnerability report..."
+              mkdir -p /home/ubuntu/HostVA
               sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
               grep -oP '(?<=</report_format>)[^<]+' | base64 -d > /home/ubuntu/HostVA/CIS_Audit.xml
               
