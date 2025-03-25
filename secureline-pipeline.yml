@@ -277,6 +277,7 @@ stages:
               sudo docker build -f Dockerfile . -t webgoat/webgoat
               sudo docker tag webgoat/webgoat:latest gtyagi017/webgoat:latest
               sudo docker push gtyagi017/webgoat:latest
+              sudo docker image prune -f
               echo "WebGoat Docker image pushed successfully on Docker Hub"
             displayName: 'Build and Push Docker Image' 
 
@@ -593,7 +594,7 @@ stages:
                 fi
                 
                 echo "Scan in progress... ($(( $TIMEOUT - $(date +%s) )) seconds remaining)"
-                sleep 30
+                sleep 60
               done
               
               # Check if we timed out
