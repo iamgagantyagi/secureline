@@ -453,7 +453,7 @@ stages:
                     echo "No scan reports found"
                     exit 1
                 fi
-                az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/securelinescanoutput/cloudscan/ --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/securelinescanoutput/cloudscan --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'                      
 
   - stage: HostVulnerabilityAssessment
@@ -623,7 +623,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload-batch --source /home/ubuntu/HostVA/ --destination $(ArtifactContainerName)/securelinescanoutput/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload-batch --source /home/ubuntu/HostVA/ --destination $(ArtifactContainerName)/securelinescanoutput/HostVA --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Host Vulnerability upload results'
 
   - stage: FinalResult
@@ -662,6 +662,28 @@ stages:
                 python3 run_parser.py -t "Trivy Scanning" -p "securelinescanoutput/Trivy_result.json" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
                 cd ../
-                az storage blob upload --file /home/ubuntu/securelineparser/output_files/latest_report/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
-                az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
+                az storage blob upload --file /home/ubuntu/securelineparser/output_files/latest_report/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite   
+                TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+                # List all blobs under 'securelinescanoutput/' and handle nested structures correctly
+                az storage blob list --container-name $(ArtifactContainerName) --account-name $(ArtifactStorageAccount) --query "[].name" -o tsv | grep '^securelinescanoutput/' | while read -r BLOB_NAME; do
+                  # Normalize blob path to remove extra slashes (fixes nested files issue)
+                  CLEAN_BLOB_NAME=$(echo "$BLOB_NAME" | sed 's|//|/|g')
+
+                  # Construct new blob name with timestamped folder
+                  NEW_BLOB_NAME=$(echo "$CLEAN_BLOB_NAME" | sed "s|^securelinescanoutput/|securelinescanoutput-$TIMESTAMP/|")
+
+                  echo "Copying $CLEAN_BLOB_NAME to $NEW_BLOB_NAME"
+
+                  # Copy each blob to the new timestamped location
+                  az storage blob copy start --destination-container $(ArtifactContainerName) --destination-blob "$NEW_BLOB_NAME" --source-container $(ArtifactContainerName) --source-blob "$CLEAN_BLOB_NAME" --account-name $(ArtifactStorageAccount)
+                done
+
+                # Wait for copy operations to complete (increase sleep time if needed)
+                sleep 20
+                echo "Deleting old blobs under securelinescanoutput/"
+                az storage blob list --container-name $(ArtifactContainerName) --account-name $(ArtifactStorageAccount) --query "[].name" -o tsv | grep '^securelinescanoutput/' | while read -r OLD_BLOB; do
+                  az storage blob delete --container-name $(ArtifactContainerName) --name "$OLD_BLOB" --account-name $ACCOUNT_NAME
+                done
+
+                echo "Blob copy completed. Old files deleted successfully."
             displayName: 'Run Final Result Parser and upload results'
