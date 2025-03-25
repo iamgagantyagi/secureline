@@ -195,7 +195,7 @@ stages:
           - script: |
               echo "Started scanning for Static Application Security Testing (SAST)"
               cd $HOME/WebGoat
-              mvn clean verify sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine" -e
+              mvn sonar:sonar -Dsonar.host.url="http://$(DefectDojoDomain):30000" -Dsonar.java.binaries="$HOME/WebGoat/src/main/java" -Dsonar.token="$(Sonartoken)" -Dsonar.projectKey="SecureLine" -e
               echo "Scanning completed."
               echo "Generating SonarQube report..."
               cd /home/ubuntu/
