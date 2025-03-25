@@ -590,7 +590,7 @@ stages:
               # Generate XML report instead of PDF
               echo "Generating XML vulnerability report..."
               sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
-              grep -oP '(?<=</report_format>)[^<]+' | base64 -d > /home/ubuntu/CIS_Audit.xml
+              grep -oP '(?<=</report_format>)[^<]+' | base64 -d > /home/ubuntu/HostVA/CIS_Audit.xml
               
               # Check if report was generated
               if [ -f /home/ubuntu/CIS_Audit.xml ]; then
@@ -607,7 +607,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload-batch --source /home/ubuntu/CIS_Audit.xml --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload-batch --source /home/ubuntu/HostVA/ --destination $(ArtifactContainerName)/HostVA/ --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Host Vulnerability upload results'
 
   - stage: FinalResult
