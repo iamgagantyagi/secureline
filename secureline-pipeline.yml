@@ -640,6 +640,7 @@ stages:
                 echo "Installing dependencies for Final Result"
                 sudo apt-get install python3-dateutil python3-html2text -y
                 cd /home/ubuntu/
+                rm -rf securelineparser/
                 git clone https://github.com/iamgagantyagi/securelineparser.git
                 az storage blob download-batch --source $(ArtifactContainerName) --destination /home/ubuntu/securelineparser/ --account-name $(ArtifactStorageAccount)
             displayName: 'Install dependencies and download artifacts'
