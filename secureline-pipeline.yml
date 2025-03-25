@@ -652,7 +652,7 @@ stages:
                 cd /home/ubuntu/securelineparser
                 pip install -r requirements.txt
                 pip install pyOpenSSL==22.0.0
-                sudo export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
+                export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
                 python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "DependencyCheck Scan" -p "securelinescanoutput/dependency-check-report.xml" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/K8S_config_scan.xml" -o "consolidated_test_output.csv"
@@ -661,6 +661,6 @@ stages:
                 python3 run_parser.py -t "Trivy Scanning" -p "securelinescanoutput/Trivy_result.json" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
                 cd ../
-                az storage blob upload --file /home/ubuntu/securelineparser/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/securelineparser/output_files/latest_report/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite
                 az storage blob move --source-container $(ArtifactContainerName) --source-name securelinescanoutput/ --dest-container $(ArtifactContainerName) --dest-name securelinescanoutput-$(date +"%Y%m%d-%H%M%S")/ --account-name $(ArtifactStorageAccount)
             displayName: 'Run Final Result Parser and upload results'
