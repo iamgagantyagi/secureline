@@ -454,7 +454,7 @@ stages:
                     echo "No scan reports found"
                     exit 1
                 fi
-                az storage blob upload-batch --source /home/ubuntu/output/compliance/ --destination $(ArtifactContainerName)/securelinescanoutput/cloudscan --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload-batch --source /home/ubuntu/output/compliance --destination $(ArtifactContainerName)/securelinescanoutput/cloudscan --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'                      
 
   - stage: HostVulnerabilityAssessment
@@ -643,7 +643,7 @@ stages:
                 cd /home/ubuntu/
                 rm -rf securelineparser/
                 git clone https://github.com/iamgagantyagi/securelineparser.git
-                az storage blob download-batch --source $(ArtifactContainerName) --destination /home/ubuntu/securelineparser/ --account-name $(ArtifactStorageAccount)
+                az storage blob download-batch --source $(ArtifactContainerName) --destination /home/ubuntu/securelineparser/ --pattern "securelinescanoutput/*" --account-name $(ArtifactStorageAccount)
             displayName: 'Install dependencies and download artifacts'
           - task: AzureCLI@2
             inputs:
