@@ -446,15 +446,14 @@ stages:
 
                     # Upload all renamed files
                     az storage blob upload-batch \
-                        --source /home/ubuntu/output/compliance/ \
-                        --destination "$(ArtifactContainerName)/securelinescanoutput/cloudscan/" \
+                        --source /home/ubuntu/output/compliance \
+                        --destination "$(ArtifactContainerName)/securelinescanoutput/cloudscan" \
                         --account-name "$(ArtifactStorageAccount)" \
                         --overwrite
                 else
                     echo "No scan reports found"
                     exit 1
                 fi
-                az storage blob upload-batch --source /home/ubuntu/output/compliance --destination $(ArtifactContainerName)/securelinescanoutput/cloudscan --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Cloud Scan and upload results'                      
 
   - stage: HostVulnerabilityAssessment
