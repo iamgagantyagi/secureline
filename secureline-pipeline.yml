@@ -629,7 +629,7 @@ stages:
   - stage: FinalResult
     dependsOn: HostVulnerabilityAssessment
     jobs:
-      - job: BuildAction
+      - job: FinalResult
         steps:
           - task: AzureCLI@2
             inputs:
@@ -682,7 +682,7 @@ stages:
                 sleep 20
                 echo "Deleting old blobs under securelinescanoutput/"
                 az storage blob list --container-name $(ArtifactContainerName) --account-name $(ArtifactStorageAccount) --query "[].name" -o tsv | grep '^securelinescanoutput/' | while read -r OLD_BLOB; do
-                  az storage blob delete --container-name $(ArtifactContainerName) --name "$OLD_BLOB" --account-name $ACCOUNT_NAME
+                  az storage blob delete --container-name $(ArtifactContainerName) --name "$OLD_BLOB" --account-name $(ArtifactStorageAccount)
                 done
 
                 echo "Blob copy completed. Old files deleted successfully."
