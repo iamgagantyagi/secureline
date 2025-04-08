@@ -238,19 +238,19 @@ stages:
         steps:
           - script: |
               echo "Checking if Kubescape is already installed..."
-              if command -v kubescape &> /dev/null; then
+              if [ -f "$HOME/.kubescape/bin/kubescape" ]; then
                 echo "Kubescape is already installed, skipping installation"
               else
                 echo "Installing dependencies for Containers Configuration Scan"
                 cd /home/ubuntu/
                 curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                echo 'export PATH=$HOME/.kubescape/bin:$PATH' >> ~/.bashrc
                 source ~/.bashrc
               fi
             displayName: 'Install Container Scanning dependencies'
           - script: |
               echo "Scanning YAML for application"
-              export PATH=$PATH:$HOME/.kubescape/bin
+              export PATH=$HOME/.kubescape/bin:$PATH
               kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
@@ -288,7 +288,7 @@ stages:
         steps:
           - script: |
               echo "Checking if trivy is already installed..."
-              if command -v trivy &> /dev/null; then
+              if [ -f "$HOME/.local/bin/trivy" ]; then
                 echo "trivy is already installed, skipping installation"
               else
                 cd /home/ubuntu/
@@ -377,13 +377,13 @@ stages:
         steps:
           - script: |
               echo "Checking if Kubescape is already installed..."
-              if command -v kubescape &> /dev/null; then
+              if [ -f "$HOME/.kubescape/bin/kubescape" ]; then
                 echo "Kubescape is already installed, skipping installation"
               else
                 echo "Installing dependencies for Containers Configuration Scan"
                 cd /home/ubuntu/
                 curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
-                echo 'export PATH=$PATH:$HOME/.kubescape/bin' >> ~/.bashrc
+                echo 'export PATH=$HOME/.kubescape/bin:$PATH' >> ~/.bashrc
                 source ~/.bashrc
               fi
             displayName: 'Install Container Scanning dependencies'
@@ -406,14 +406,14 @@ stages:
         steps:
           - script: |
               echo "Installing dependencies for Cloud Scan"
-              if command -v prowler &> /dev/null; then
+              if [ -f "$HOME/.local/bin/prowler" ]; then
                 echo "prowler is already installed, skipping installation"
+                pipx upgrade prowler
               else
                 echo "Installing dependencies for Containers Configuration Scan"
                 sudo apt-get install -y pipx
                 pipx install prowler
-                prowler -v
-                pipx upgrade prowler
+                prowler -v  
                 echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
                 source ~/.bashrc
               fi
@@ -429,16 +429,19 @@ stages:
                 export PATH=$HOME/.local/bin:$PATH
                 cd /home/ubuntu/
                 rm -rf /home/ubuntu/output/
-                prowler azure --managed-identity-auth 
+                export AZURE_CLIENT_ID=$(clientid)
+                export AZURE_CLIENT_SECRET=$(clientsecret)
+                export AZURE_TENANT_ID=$(tenantid)
+                prowler azure --sp-env-auth 
                 # Check if compliance directory exists
                 if [ -d "/home/ubuntu/output/compliance/" ] && [ "$(ls -A /home/ubuntu/output/compliance/)" ]; then
                     # Navigate to the compliance directory
-                    cd /home/ubuntu/output/compliance/
+                    cd /home/ubuntu/output/
 
                     # Rename all files to remove the unique ID
                     for file in prowler-output-*-*-*-*-*_*.csv; do
                         # Use parameter expansion to remove the ID part
-                        new_filename=$(echo "$file" | sed -E 's/prowler-output-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9]{14}_/prowler-output_/')
+                        new_filename=$(echo "$file" | sed -E 's/prowler-output-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9]{14}/prowler-output/')
                         
                         # Rename the file
                         mv "$file" "$new_filename"
@@ -455,6 +458,58 @@ stages:
                     exit 1
                 fi
             displayName: 'Run Cloud Scan and upload results'                      
+
+  - stage: CIS Scan
+    jobs:
+      - job: CIS Scan 
+        steps:
+          - script: |
+              echo "Checking if CIS script is already installed..."
+              if [ -d "/opt/UBUNTU22-CIS-Audit" ] && [ -f "/opt/UBUNTU22-CIS-Audit/run_audit.sh" ]; then
+                echo "CIS script is already installed, skipping installation"
+              else
+                echo "Installing dependencies for Source Composition Analysis"
+                sudo curl -L https://github.com/goss-org/goss/releases/latest/download/goss-linux-amd64 -o /usr/local/bin/goss
+                sudo chmod +rx /usr/local/bin/goss
+                echo 'export PATH=/usr/local/bin:$PATH' >> ~/.bashrc
+                source ~/.bashrc
+                cd /opt
+                sudo rm -rf UBUNTU22-CIS-Audit
+                wget https://github.com/iamgagantyagi/secureline/UBUNTU22-CIS-Audit.zip
+                unzip -o UBUNTU22-CIS-Audit.zip
+                sudo rm -rf UBUNTU22-CIS-Audit.zip
+                chmod -R 775 UBUNTU22-CIS-Audit/run_audit.sh
+              fi
+            displayName: 'Install Source Composition Analysis dependencies'
+          - script: |
+              export PATH=/usr/local/bin:$PATH
+              sudo rm -rf /opt/audit_securelinedemo-CIS-UBUNTU22*
+              cd /opt/UBUNTU22-CIS-Audit
+              sudo ./run_audit.sh
+              echo "Scanning completed."
+            displayName: 'Run Dependency Check'  
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                # Find the latest audit file
+                AUDIT_FILE=$(ls -t /opt/audit_securelinedemo-CIS-UBUNTU22_*.json | head -1)
+                
+                # Extract just the filename without the path
+                FILENAME=$(basename $AUDIT_FILE)
+                
+                # Upload to Azure Blob Storage
+                az storage blob upload \
+                  --file "$AUDIT_FILE" \
+                  --container-name $(ArtifactContainerName) \
+                  --name "securelinescanoutput/$FILENAME" \
+                  --account-name $(ArtifactStorageAccount) \
+                  --overwrite
+                
+                echo "Uploaded $FILENAME to Azure Blob Storage"
+            displayName: 'Upload CIS Scan Results'
 
   - stage: HostVulnerabilityAssessment
     jobs:
@@ -651,16 +706,23 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |  
                 cd /home/ubuntu/securelineparser
-                pip install -r requirements.txt
-                pip install pyOpenSSL==22.0.0
-                export PYTHONPATH=/root/.pyenv/versions/3.9.17/lib/python3.9/site-packages
-                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "DependencyCheck Scan" -p "securelinescanoutput/dependency-check-report.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/K8S_config_scan.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Kubescape Scanning" -p "securelinescanoutput/k8s_namespace_scan.xml" -o "consolidated_test_output.csv"
+                ./setup_postgres_parser.sh
                 python3 run_parser.py -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Trivy Scanning" -p "securelinescanoutput/Trivy_result.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Dependency Check Scan" -p "securelinescanoutput/dependency-check-report.xml" -o "consolidated_test_output.csv"
                 python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Kubescape Scanning_CI" -p "securelinescanoutput/K8S_config_scan.xml" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Kubescape Scanning_CD" -p "securelinescanoutput/k8s_namespace_scan.xml" -o "consolidated_test_output.csv" 
+                
+                CIS_FILE=$(ls -t securelinescanoutput/audit_securelinedemo-CIS-UBUNTU22_*.json 2>/dev/null | head -1)
+                if [ -z "$CIS_FILE" ]; then
+                  echo "No matching audit file found!"
+                  exit 1
+                fi
+                echo "Found audit file: $CIS_FILE"
+                python3 run_parser.py -t "UBUNTU22-CIS-Audit" -p "$CIS_FILE" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "Cloud Security Audit_Azure" -p "securelinescanoutput/cloudscan/prowler-output.ocsf.json" -o "consolidated_test_output.csv"
                 cd ../
                 az storage blob upload --file /home/ubuntu/securelineparser/output_files/latest_report/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite   
                 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
