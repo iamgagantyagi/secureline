@@ -459,9 +459,9 @@ stages:
                 fi
             displayName: 'Run Cloud Scan and upload results'                      
 
-  - stage: CIS Scan
+  - stage: CISScan
     jobs:
-      - job: CIS Scan 
+      - job: CISScan 
         steps:
           - script: |
               echo "Checking if CIS script is already installed..."
