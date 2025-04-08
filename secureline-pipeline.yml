@@ -648,7 +648,7 @@ stages:
                 fi
                 
                 echo "Scan in progress... ($(( $TIMEOUT - $(date +%s) )) seconds remaining)"
-                sleep 60
+                sleep 80
               done
               
               # Check if we timed out
