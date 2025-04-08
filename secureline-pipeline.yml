@@ -634,10 +634,10 @@ stages:
               else
                 echo "##vso[task.logissue type=warning]Scan may not have started properly. Response: $START_RESPONSE"
                 # Continue anyway as the task might still be running
-              fi
-              
+              fi 
               # Monitor scan with simplified polling
-              TIMEOUT=$(( $(date +%s) + $(SCAN_TIMEOUT) ))
+              SCAN_TIMEOUT=1200
+              TIMEOUT=$(( $(date +%s) + $SCAN_TIMEOUT ))
               while [ $(date +%s) -lt $TIMEOUT ]; do
                 SCAN_STATUS=$(sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_tasks task_id='$TASK_ID'/>")
                 
@@ -648,7 +648,7 @@ stages:
                 fi
                 
                 echo "Scan in progress... ($(( $TIMEOUT - $(date +%s) )) seconds remaining)"
-                sleep 80
+                sleep 60
               done
               
               # Check if we timed out
