@@ -112,10 +112,11 @@ stages:
               else
                 echo "Installing dependencies for Source Composition Analysis"
                 cd /home/ubuntu/
+                mkdir dependency-check-results
                 rm -rf dependency-check
-                wget https://github.com/jeremylong/DependencyCheck/releases/download/v7.4.0/dependency-check-7.4.0-release.zip
-                unzip -o dependency-check-7.4.0-release.zip
-                rm -rf dependency-check-7.4.0-release.zip
+                wget https://github.com/jeremylong/DependencyCheck/releases/download/v10.0.3/dependency-check-10.0.3-release.zip
+                unzip -o dependency-check-10.0.3-release.zip
+                rm -rf dependency-check-10.0.3-release.zip
                 chmod -R 775 dependency-check/bin/dependency-check.sh
                 echo 'export PATH=/home/ubuntu/dependency-check/bin:$PATH' >> ~/.bashrc
                 source ~/.bashrc 
@@ -125,7 +126,7 @@ stages:
               export PATH=/home/ubuntu/dependency-check/bin:$PATH
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
-              dependency-check.sh -o '/home/ubuntu/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
+              dependency-check.sh -o '/home/ubuntu/dependency-check-results/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint
               echo "Scanning completed."
             displayName: 'Run Dependency Check'  
           - task: AzureCLI@2
@@ -134,7 +135,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
-                az storage blob upload --file /home/ubuntu/dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/dependency-check-results/dependency-check-report.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/dependency-check-report.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Dependency Check Results'
 
           - script: |
@@ -177,11 +178,11 @@ stages:
                   echo "Maven is already installed, skipping installation"
                 fi
                 
-                rm -rf sonar-scanner-5.0.1.3006-linux
-                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-                unzip sonar-scanner-cli-5.0.1.3006-linux.zip
-                rm -rf sonar-scanner-cli-5.0.1.3006-linux.zip
-                sudo mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner
+                rm -rf sonar-scanner-cli-7.1.0.4889-linux-x64
+                wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.1.0.4889-linux-x64.zip
+                unzip sonar-scanner-cli-7.1.0.4889-linux-x64.zip
+                rm -rf sonar-scanner-cli-7.1.0.4889-linux-x64.zip
+                sudo mv sonar-scanner-cli-7.1.0.4889-linux-x64 /opt/sonar-scanner
                 chmod -R 775 /opt/sonar-scanner
               fi
             displayName: 'Install SAST dependencies'
@@ -232,9 +233,9 @@ stages:
                 az storage blob upload --file /home/ubuntu/sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload SonarQube Scan Results' 
 
-  - stage: ContainersConfigurationScan
+  - stage: Kubescape static scan
     jobs:
-      - job: ContainersConfigurationScan
+      - job: Kubescape static scan
         steps:
           - script: |
               echo "Checking if Kubescape is already installed..."
@@ -243,6 +244,7 @@ stages:
               else
                 echo "Installing dependencies for Containers Configuration Scan"
                 cd /home/ubuntu/
+                mkdir kubescape_results
                 curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
                 echo 'export PATH=$HOME/.kubescape/bin:$PATH' >> ~/.bashrc
                 source ~/.bashrc
@@ -251,7 +253,7 @@ stages:
           - script: |
               echo "Scanning YAML for application"
               export PATH=$HOME/.kubescape/bin:$PATH
-              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/K8S_config_scan.xml
+              kubescape scan /home/ubuntu/WebGoat/webgoat_K8S.yml --format junit --output /home/ubuntu/kubescape_results/kubescape_static_scan.xml
               echo "Scanning completed."
             displayName: 'Run Kubescape Scan'
 
@@ -261,7 +263,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |  
-                az storage blob upload --file /home/ubuntu/K8S_config_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/kubescape_results/kubescape_static_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Kubescape Scan Results'       
 
   - stage: BuildAndPushDockerImage
@@ -281,10 +283,10 @@ stages:
               echo "WebGoat Docker image pushed successfully on Docker Hub"
             displayName: 'Build and Push Docker Image' 
 
-  - stage: TrivyDockerImageScan
+  - stage: TrivyMutipleScan
     dependsOn: BuildAndPushDockerImage
     jobs:
-      - job: TrivyDockerImageScan
+      - job: TrivyMutipleScan
         steps:
           - script: |
               echo "Checking if trivy is already installed..."
@@ -292,27 +294,46 @@ stages:
                 echo "trivy is already installed, skipping installation"
               else
                 cd /home/ubuntu/
+                mkdir trivy_outputs
                 echo "Installing Trivy"
-                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.17.2
+                curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.54.1
                 echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
                 source ~/.bashrc
               fi  
             displayName: 'Install Trivy'
           - script: |
               export PATH=$HOME/.local/bin:$PATH
+              echo "Scanning DockerFile"
+              cd /home/ubuntu/
+              trivy config /home/ubuntu/WebGoat/Dockerfile --format json -o /home/ubuntu/trivy_results/Trivy_Misconfig_result.json
+              echo "Scanning completed."
+            displayName: 'Trivy Dockerfile Container Misconfig Scan'
+
+          - script: |
+              export PATH=$HOME/.local/bin:$PATH
               echo "Scanning Docker image"
               cd /home/ubuntu/
-              trivy image -f json -o /home/ubuntu/Trivy_result.json gtyagi017/webgoat:latest
+              trivy image -f json -o /home/ubuntu/trivy_results/Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
-            displayName: 'Run Trivy Scan'
+            displayName: 'Run Trivy Container Scan'
+
+          - script: |
+              export PATH=$HOME/.local/bin:$PATH
+              echo "Trivy CIS Compliance Scan for docker images"
+              cd /home/ubuntu/
+              trivy image --compliance=docker-cis-1.6.0 gtyagi017/webgoat:latest -f json -o /home/ubuntu/trivy_results/Trivy_CIS_result.json
+              echo "Scanning completed."
+            displayName: 'Trivy CIS Compliance Scan'
 
           - task: AzureCLI@2
             inputs:
               azureSubscription: 'secureline'
               scriptType: bash
               scriptLocation: inlineScript
-              inlineScript: |  
-                az storage blob upload --file /home/ubuntu/Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
+              inlineScript: | 
+                az storage blob upload --file /home/ubuntu/trivy_results/Trivy_Misconfig_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/trivy_results/Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite 
+                az storage blob upload --file /home/ubuntu/trivy_results/Trivy_CIS_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
@@ -371,9 +392,9 @@ stages:
               if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
             displayName: 'Send SonarQube Results to DefectDojo' 
 
-  - stage: ContainerScan
+  - stage: Kubescape dynamic scan
     jobs:
-      - job: ContainerScan
+      - job: Kubescape dynamic scan
         steps:
           - script: |
               echo "Checking if Kubescape is already installed..."
@@ -395,9 +416,9 @@ stages:
               inlineScript: |
                 echo "kubescape scanning application namespace"
                 export PATH=$PATH:$HOME/.kubescape/bin
-                kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/k8s_namespace_scan.xml
+                kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/kubescape_results/k8s_dynamic_scan.xml
                 echo "Uploading Kubescape scan results to Azure Blob Storage"
-                az storage blob upload --file /home/ubuntu/k8s_namespace_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/kubescape_results/k8s_dynamic_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Container Scan and upload results'
 
   - stage: CloudScan
@@ -449,7 +470,7 @@ stages:
 
                     # Upload all renamed files
                     az storage blob upload-batch \
-                        --source /home/ubuntu/output/compliance \
+                        --source /home/ubuntu/output/ \
                         --destination "$(ArtifactContainerName)/securelinescanoutput/cloudscan" \
                         --account-name "$(ArtifactStorageAccount)" \
                         --overwrite
@@ -494,17 +515,24 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
+                IP_ADDRESS=$(hostname -I | awk '{print $1}')
+                OUTPUT_FILENAME="cis_audit_${IP_ADDRESS}_UBUNTU2204.json"
+
                 # Find the latest audit file
                 AUDIT_FILE=$(ls -t /opt/audit_securelinedemo-CIS-UBUNTU22_*.json | head -1)
                 
                 # Extract just the filename without the path
-                FILENAME=$(basename $AUDIT_FILE)
+                #FILENAME=$(basename $AUDIT_FILE)
+
+                # Copy to new filename format
+                sudo cp "$AUDIT_FILE" "/opt/$OUTPUT_FILENAME"
+                sudo rm -rf /opt/audit_securelinedemo*
                 
                 # Upload to Azure Blob Storage
                 az storage blob upload \
-                  --file "$AUDIT_FILE" \
+                  --file "/opt/$OUTPUT_FILENAME" \
                   --container-name $(ArtifactContainerName) \
-                  --name "securelinescanoutput/$FILENAME" \
+                  --name "securelinescanoutput/$OUTPUT_FILENAME" \
                   --account-name $(ArtifactStorageAccount) \
                   --overwrite
                 
@@ -706,23 +734,27 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |  
                 cd /home/ubuntu/securelineparser
-                ./setup_postgres_parser.sh
-                python3 run_parser.py -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Dependency Check Scan" -p "securelinescanoutput/dependency-check-report.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Kubescape Scanning_CI" -p "securelinescanoutput/K8S_config_scan.xml" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Kubescape Scanning_CD" -p "securelinescanoutput/k8s_namespace_scan.xml" -o "consolidated_test_output.csv" 
+                sudo chmod -R 755 /home/ubuntu/securelineparser/setup_postgres_parser.sh
+                sudo ./setup_postgres_parser.sh
+                python3 run_parser.py -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" 
+                python3 run_parser.py -t "Dependency Check Scan" -p "securelinescanoutput/dependency-check-report.xml" 
+                python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$Sonarqubeusertoken" 
+                python3 run_parser.py -t "TrivyMisconfig" -p "securelinescanoutput/Trivy_Misconfig_result.json"
+                python3 run_parser.py -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" 
+                python3 run_parser.py -t "Trivy CIS scan" -p "securelinescanoutput/Trivy_CIS_result.json"
+                python3 run_parser.py -t "Kubescape Scanning_CI" -p "securelinescanoutput/K8S_config_scan.xml" 
+                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" 
+                python3 run_parser.py -t "Kubescape Scanning_CD" -p "securelinescanoutput/k8s_namespace_scan.xml" 
                 
-                CIS_FILE=$(ls -t securelinescanoutput/audit_securelinedemo-CIS-UBUNTU22_*.json 2>/dev/null | head -1)
+                CIS_FILE=$(ls -t securelinescanoutput/cis_audit*.json 2>/dev/null | head -1)
                 if [ -z "$CIS_FILE" ]; then
                   echo "No matching audit file found!"
                   exit 1
                 fi
                 echo "Found audit file: $CIS_FILE"
-                python3 run_parser.py -t "UBUNTU22-CIS-Audit" -p "$CIS_FILE" -o "consolidated_test_output.csv"
-                python3 run_parser.py -t "Cloud Security Audit_Azure" -p "securelinescanoutput/cloudscan/prowler-output.ocsf.json" -o "consolidated_test_output.csv"
+                python3 run_parser.py -t "UBUNTU20-CIS-Audit" -p "$CIS_FILE"
+                python3 run_parser.py -t "Azure Cloud Security Suite" -p "securelinescanoutput/cloudscan/prowler-output.ocsf.json" 
+                python3 run_parser.py -t "Host Vulnerability Assessment" -p "securelinescanoutput/HostVA/CIS_Audit.xml"
                 cd ../
                 az storage blob upload --file /home/ubuntu/securelineparser/output_files/latest_report/consolidated_test_output.csv --container-name $(ArtifactContainerName) --name securelinescanoutput/consolidated_test_output.csv --account-name $(ArtifactStorageAccount) --overwrite   
                 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
