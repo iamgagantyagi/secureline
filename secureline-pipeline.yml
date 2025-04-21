@@ -313,7 +313,7 @@ stages:
               export PATH=$HOME/.local/bin:$PATH
               echo "Scanning Docker image"
               cd /home/ubuntu/
-              trivy image -f json -o /home/ubuntu/trivy_results/Trivy_result.json gtyagi017/webgoat:latest
+              trivy image --scanners vuln -f json -o /home/ubuntu/trivy_results/Trivy_result.json gtyagi017/webgoat:latest
               echo "Scanning completed."
             displayName: 'Run Trivy Container Scan'
 
