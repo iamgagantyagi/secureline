@@ -233,9 +233,9 @@ stages:
                 az storage blob upload --file /home/ubuntu/sonar-report.json --container-name $(ArtifactContainerName) --name securelinescanoutput/sonar-report.json --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload SonarQube Scan Results' 
 
-  - stage: Kubescape static scan
+  - stage: KubescapeStaticScan
     jobs:
-      - job: Kubescape static scan
+      - job: KubescapeStaticScan
         steps:
           - script: |
               echo "Checking if Kubescape is already installed..."
@@ -392,9 +392,9 @@ stages:
               if [ $? -eq 0 ]; then echo -e "\nReport sent successfully"; else echo -e "\nFailed to send report"; fi
             displayName: 'Send SonarQube Results to DefectDojo' 
 
-  - stage: Kubescape dynamic scan
+  - stage: KubescapeDynamicScan
     jobs:
-      - job: Kubescape dynamic scan
+      - job: KubescapeDynamicScan
         steps:
           - script: |
               echo "Checking if Kubescape is already installed..."
