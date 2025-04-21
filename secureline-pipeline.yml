@@ -337,7 +337,7 @@ stages:
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
-    dependsOn: TrivyDockerImageScan
+    dependsOn: TrivyMutipleScan
     jobs:
       - job: Deploy
         steps:
