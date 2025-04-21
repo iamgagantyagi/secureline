@@ -466,12 +466,8 @@ stages:
                           fi
                     done
 
-                    # Upload all renamed files
-                    az storage blob upload-batch \
-                        --source /home/ubuntu/output/prowler-output.ocsf.json \
-                        --destination "$(ArtifactContainerName)/securelinescanoutput/cloudscan" \
-                        --account-name "$(ArtifactStorageAccount)" \
-                        --overwrite
+                    # Upload renamed files
+                    az storage blob upload --file /home/ubuntu/output/prowler-output.ocsf.json --container-name $(ArtifactContainerName) --name /securelinescanoutput/cloudscan --account-name $(ArtifactStorageAccount) --overwrite
                 else
                     echo "No scan reports found"
                     exit 1
