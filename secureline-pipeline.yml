@@ -263,7 +263,7 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |  
-                az storage blob upload --file /home/ubuntu/kubescape_results/kubescape_static_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/K8S_config_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/kubescape_results/kubescape_static_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/kubescape_static_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Kubescape Scan Results'       
 
   - stage: BuildAndPushDockerImage
@@ -321,7 +321,9 @@ stages:
               export PATH=$HOME/.local/bin:$PATH
               echo "Trivy CIS Compliance Scan for docker images"
               cd /home/ubuntu/
-              trivy image --compliance=docker-cis-1.6.0 gtyagi017/webgoat:latest -f json -o /home/ubuntu/trivy_results/Trivy_CIS_result.json
+              IP_ADDRESS=$(hostname -I | awk '{print $1}')
+              OUTPUT_FILENAME="TrivyCIS-${IP_ADDRESS}-UBUNTU.json"
+              trivy image --compliance docker-cis-1.6.0 --report all gtyagi017/webgoat:latest -f json -o "/home/ubuntu/trivy_results/${OUTPUT_FILENAME}""
               echo "Scanning completed."
             displayName: 'Trivy CIS Compliance Scan'
 
@@ -333,7 +335,11 @@ stages:
               inlineScript: | 
                 az storage blob upload --file /home/ubuntu/trivy_results/Trivy_Misconfig_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_Misconfig_result.json --account-name $(ArtifactStorageAccount) --overwrite
                 az storage blob upload --file /home/ubuntu/trivy_results/Trivy_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_result.json --account-name $(ArtifactStorageAccount) --overwrite 
-                az storage blob upload --file /home/ubuntu/trivy_results/Trivy_CIS_result.json --container-name $(ArtifactContainerName) --name securelinescanoutput/Trivy_CIS_result.json --account-name $(ArtifactStorageAccount) --overwrite
+
+                echo "Uploading Trivy CIS scan result to Azure Blob..."
+                IP_ADDRESS=$(hostname -I | awk '{print $1}')
+                OUTPUT_FILENAME="TrivyCIS-${IP_ADDRESS}-UBUNTU.json"
+                az storage blob upload --file "/home/ubuntu/trivy_results/${OUTPUT_FILENAME}" --container-name $(ArtifactContainerName) --name "securelinescanoutput/${OUTPUT_FILENAME}" --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Upload Trivy Scan Results'
 
   - stage: DeployApplication
@@ -418,7 +424,7 @@ stages:
                 export PATH=$PATH:$HOME/.kubescape/bin
                 kubescape scan --include-namespaces webgoat-namespace --format junit --output /home/ubuntu/kubescape_results/k8s_dynamic_scan.xml
                 echo "Uploading Kubescape scan results to Azure Blob Storage"
-                az storage blob upload --file /home/ubuntu/kubescape_results/k8s_dynamic_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_namespace_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
+                az storage blob upload --file /home/ubuntu/kubescape_results/k8s_dynamic_scan.xml --container-name $(ArtifactContainerName) --name securelinescanoutput/k8s_dynamic_scan.xml --account-name $(ArtifactStorageAccount) --overwrite
             displayName: 'Run Container Scan and upload results'
 
   - stage: CloudScan
@@ -467,7 +473,7 @@ stages:
                     done
 
                     # Upload renamed files
-                    az storage blob upload --file /home/ubuntu/output/prowler-output.ocsf.json --container-name $(ArtifactContainerName) --name /securelinescanoutput/cloudscan --account-name $(ArtifactStorageAccount) --overwrite
+                    az storage blob upload --file /home/ubuntu/output/prowler-output.ocsf.json --container-name $(ArtifactContainerName) --name securelinescanoutput/cloudscan/prowler-output.ocsf.json --account-name $(ArtifactStorageAccount) --overwrite
                 else
                     echo "No scan reports found"
                     exit 1
@@ -510,7 +516,7 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 IP_ADDRESS=$(hostname -I | awk '{print $1}')
-                OUTPUT_FILENAME="cis_audit_${IP_ADDRESS}_UBUNTU2204.json"
+                OUTPUT_FILENAME="CIS_${IP_ADDRESS}_ubuntu22_cis_audit.json"
 
                 # Find the latest audit file
                 AUDIT_FILE=$(ls -t /opt/audit_securelinedemo-CIS-UBUNTU22_*.json | head -1)
@@ -682,8 +688,7 @@ stages:
               # Generate XML report instead of PDF
               echo "Generating XML vulnerability report..."
               mkdir -p /home/ubuntu/HostVA
-              sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" | \
-              grep -oP '(?<=</report_format>)[^<]+' | base64 -d > /home/ubuntu/HostVA/CIS_Audit.xml
+              sudo docker exec -u gvm $DOCKER_CONTAINER_ID gvm-cli --gmp-username "$(GVM_USER)" --gmp-password "$(GVM_PASSWORD)" socket --xml "<get_reports report_id='$REPORT_ID' format_id='5057e5cc-b825-11e4-9d0e-28d24461215b' details='True' />" > /home/ubuntu/HostVA/CIS_Audit.xml
               
               # Check if report was generated
               if [ -f /home/ubuntu/HostVA/CIS_Audit.xml ]; then
@@ -746,18 +751,25 @@ stages:
                 python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$(Sonarqubeusertoken)" 
                 python3 run_parser.py -t "TrivyMisconfig" -p "securelinescanoutput/Trivy_Misconfig_result.json"
                 python3 run_parser.py -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" 
-                python3 run_parser.py -t "Trivy CIS scan" -p "securelinescanoutput/Trivy_CIS_result.json"
-                python3 run_parser.py -t "Kubescape Scanning_CI" -p "securelinescanoutput/K8S_config_scan.xml" 
-                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" 
-                python3 run_parser.py -t "Kubescape Scanning_CD" -p "securelinescanoutput/k8s_namespace_scan.xml" 
                 
-                CIS_FILE=$(ls -t securelinescanoutput/cis_audit*.json 2>/dev/null | head -1)
+                TrivyCIS_FILE=$(ls -t securelinescanoutput/TrivyCIS*.json 2>/dev/null | head -1)
+                if [ -z "$TrivyCIS_FILE" ]; then
+                  echo "No matching audit file found!"
+                  exit 1
+                fi
+                echo "Found audit file: $TrivyCIS_FILE"
+                python3 run_parser.py -t "Trivy CIS scan" -p "securelinescanoutput/$TrivyCIS_FILE"
+                python3 run_parser.py -t "Kubescape Scanning_CI" -p "securelinescanoutput/kubescape_static_scan.xml" 
+                python3 run_parser.py -t "ZAP Scan" -p "securelinescanoutput/zap_report" 
+                python3 run_parser.py -t "Kubescape Scanning_CD" -p "securelinescanoutput/kubescape_dynamic_scan.xml" 
+                
+                CIS_FILE=$(ls -t securelinescanoutput/CIS*.json 2>/dev/null | head -1)
                 if [ -z "$CIS_FILE" ]; then
                   echo "No matching audit file found!"
                   exit 1
                 fi
                 echo "Found audit file: $CIS_FILE"
-                python3 run_parser.py -t "UBUNTU20-CIS-Audit" -p "$CIS_FILE"
+                python3 run_parser.py -t "UBUNTU20-CIS-Audit" -p "securelinescanoutput/$CIS_FILE"
                 python3 run_parser.py -t "Azure Cloud Security Suite" -p "securelinescanoutput/cloudscan/prowler-output.ocsf.json" 
                 python3 run_parser.py -t "Host Vulnerability Assessment" -p "securelinescanoutput/HostVA/CIS_Audit.xml"
                 cd ../  
