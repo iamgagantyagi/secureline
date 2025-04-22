@@ -323,7 +323,7 @@ stages:
               cd /home/ubuntu/
               IP_ADDRESS=$(hostname -I | awk '{print $1}')
               OUTPUT_FILENAME="TrivyCIS-${IP_ADDRESS}-UBUNTU.json"
-              trivy image --compliance docker-cis-1.6.0 --report all gtyagi017/webgoat:latest -f json -o "/home/ubuntu/trivy_results/${OUTPUT_FILENAME}""
+              trivy image --compliance docker-cis-1.6.0 --report all gtyagi017/webgoat:latest -f json -o "/home/ubuntu/trivy_results/${OUTPUT_FILENAME}"
               echo "Scanning completed."
             displayName: 'Trivy CIS Compliance Scan'
 
@@ -751,7 +751,7 @@ stages:
                 python3 run_parser.py -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$(Sonarqubeusertoken)" 
                 python3 run_parser.py -t "TrivyMisconfig" -p "securelinescanoutput/Trivy_Misconfig_result.json"
                 python3 run_parser.py -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" 
-                
+
                 TrivyCIS_FILE=$(ls -t securelinescanoutput/TrivyCIS*.json 2>/dev/null | head -1)
                 if [ -z "$TrivyCIS_FILE" ]; then
                   echo "No matching audit file found!"
