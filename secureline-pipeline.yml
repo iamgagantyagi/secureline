@@ -754,19 +754,19 @@ stages:
                 CURRENT_DATE=$(date +"%Y%m%d")
                 
                 # Define CI scan name format
-                CI_SCAN_NAME="CI_${GitHubBranch}_${CURRENT_DATE}_${myBuildId}"
+                CI_SCAN_NAME="CI_$(GitHubBranch)_${CURRENT_DATE}_$(myBuildId)"
                 # Define CD scan name format
-                CD_SCAN_NAME="CD_${GitHubBranch}_${CURRENT_DATE}_${myBuildId}"
+                CD_SCAN_NAME="CD_$(GitHubBranch)_${CURRENT_DATE}_$(myBuildId)"
                 
                 echo "Using CI scan name: $CI_SCAN_NAME"
                 echo "Using CD scan name: $CD_SCAN_NAME"
         
                 # Run CI scans with CI scan name
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "Dependency Check Scan" -p "securelinescanoutput/dependency-check-report.xml" 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$(Sonarqubeusertoken)" 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "TrivyMisconfig" -p "securelinescanoutput/Trivy_Misconfig_result.json"
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Dependency Check Scan" -p "securelinescanoutput/dependency-check-report.xml" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "sonarqube" -u "http://$(DefectDojoDomain):30000" -k securityproject -b main -a "$(Sonarqubeusertoken)" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "TrivyMisconfig" -p "securelinescanoutput/Trivy_Misconfig_result.json"
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" 
 
                 TrivyCIS_FILE=$(ls -t securelinescanoutput/TrivyCIS*.json 2>/dev/null | head -1)
                 if [ -z "$TrivyCIS_FILE" ]; then
@@ -775,12 +775,12 @@ stages:
                 fi
                 echo "Found audit file: $TrivyCIS_FILE"
 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "Trivy CIS scan" -p "$TrivyCIS_FILE"
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CI_SCAN_NAME" -t "Kubescape Scanning_CI" -p "securelinescanoutput/kubescape_static_scan.xml" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Trivy CIS scan" -p "$TrivyCIS_FILE"
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Kubescape Scanning_CI" -p "securelinescanoutput/kubescape_static_scan.xml" 
 
                 # Run CD scans with CD scan name
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CD_SCAN_NAME" -t "ZAP Scan" -p "securelinescanoutput/zap_report" 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CD_SCAN_NAME" -t "Kubescape Scanning_CD" -p "securelinescanoutput/kubescape_dynamic_scan.xml" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CD_SCAN_NAME" -t "ZAP Scan" -p "securelinescanoutput/zap_report" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CD_SCAN_NAME" -t "Kubescape Scanning_CD" -p "securelinescanoutput/kubescape_dynamic_scan.xml" 
                 
                 CIS_FILE=$(ls -t securelinescanoutput/CIS*.json 2>/dev/null | head -1)
                 if [ -z "$CIS_FILE" ]; then
@@ -789,12 +789,12 @@ stages:
                 fi
                 echo "Found audit file: $CIS_FILE"
 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CD_SCAN_NAME" -t "UBUNTU20-CIS-Audit" -p "$CIS_FILE"
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CD_SCAN_NAME" -t "Azure Cloud Security Suite" -p "securelinescanoutput/cloudscan/prowler-output.ocsf.json" 
-                python3 run_parser.py -m ${GitHubRepoName} -A "WebGoat" -B ${GitHubBranch} -bn "$CD_SCAN_NAME" -t "Host Vulnerability Assessment" -p "securelinescanoutput/HostVA/CIS_Audit.xml"
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CD_SCAN_NAME" -t "UBUNTU20-CIS-Audit" -p "$CIS_FILE"
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CD_SCAN_NAME" -t "Azure Cloud Security Suite" -p "securelinescanoutput/cloudscan/prowler-output.ocsf.json" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CD_SCAN_NAME" -t "Host Vulnerability Assessment" -p "securelinescanoutput/HostVA/CIS_Audit.xml"
 
                 cd ../  
-                TIMESTAMP="${GitHubBranch}_${CURRENT_DATE}_${myBuildId}"
+                TIMESTAMP="$(GitHubBranch)_${CURRENT_DATE}_$(myBuildId)"
                 # List all blobs under 'securelinescanoutput/' and handle nested structures correctly
                 az storage blob list --container-name $(ArtifactContainerName) --account-name $(ArtifactStorageAccount) --query "[].name" -o tsv | grep '^securelinescanoutput/' | while read -r BLOB_NAME; do
                   # Normalize blob path to remove extra slashes (fixes nested files issue)
