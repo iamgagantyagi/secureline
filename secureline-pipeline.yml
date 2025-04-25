@@ -741,6 +741,10 @@ stages:
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |  
+                export DB_HOST="$(DefectDojoDomain)"
+                export DB_USER="$(PostgresUser)"
+                export DB_PASSWORD="$(PostgresPassword)"
+                export DB_NAME="$(postgresDBName)
                 cd /home/ubuntu/securelineparser
                 # Check if postgres container is already running
                 if docker ps | grep -q postgres-container; then
@@ -794,7 +798,7 @@ stages:
                 python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CD_SCAN_NAME" -t "Host Vulnerability Assessment" -p "securelinescanoutput/HostVA/CIS_Audit.xml"
 
                 cd ../  
-                TIMESTAMP="$(GitHubBranch)_${CURRENT_DATE}_$(myBuildId)"
+                TIMESTAMP="$(GitHubRepoName)_$(GitHubBranch)_${CURRENT_DATE}_$(myBuildId)"
                 # List all blobs under 'securelinescanoutput/' and handle nested structures correctly
                 az storage blob list --container-name $(ArtifactContainerName) --account-name $(ArtifactStorageAccount) --query "[].name" -o tsv | grep '^securelinescanoutput/' | while read -r BLOB_NAME; do
                   # Normalize blob path to remove extra slashes (fixes nested files issue)
@@ -817,4 +821,25 @@ stages:
                 done
 
                 echo "Blob copy completed. Old files deleted successfully."
-            displayName: 'Run Final Result Parser and upload results'
+            displayName: 'Run Final Result Parser and upload results to Azure Storage'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: 'secureline'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                # Make Key Vault secrets available as environment variables for the script
+                export GRAFANA_USER="$(GrafanaUser)"
+                export GRAFANA_PASSWORD="$(GrafanaPassword)"
+                export domain="$(DefectDojoDomain)"
+                # Check if Grafana container is already running
+                if docker ps | grep -q grafana-container; then
+                  echo "Grafana container is already running, skipping installation"
+                else
+                  echo "Setting up Grafana container..."
+                  sudo chmod -R 755 /home/ubuntu/securelineparser/setup_grafana.sh
+                  sudo ./setup_grafana.sh
+                fi
+            displayName: 'Setup Grafana with PostgreSQL data source and dashboards'
+              
