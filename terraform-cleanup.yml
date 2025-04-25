@@ -2,7 +2,7 @@
 trigger: none  # Disable automatic triggers
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-22.04'
 
 variables:
 - group: secureline-secret
