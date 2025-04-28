@@ -14,7 +14,7 @@ sudo chown ubuntu:ubuntu $HOME/.kube/config
 # Azure Login
 echo "Logging into Azure using service principal "
 az login --service-principal -u "$CLIENT_ID" -p "$CLIENT_SECRET" --tenant "$TENANT_ID"
-az account set --subscription "$subscriptionid"
+az account set --subscription "$SUBSCRIPTION_ID"
 
 # Start dependency installations in parallel
   echo "Installing dependencies"
