@@ -152,15 +152,15 @@ resource "time_sleep" "wait_for_vm" {
 }
 
 # Create DNS zone if needed
-resource "azurerm_dns_zone" "dns_zone" {
-  count               = var.create_dns_zone ? 1 : 0
-  name                = var.dns_zone
-  resource_group_name = data.azurerm_resource_group.existing_rg.name
-}
+# resource "azurerm_dns_zone" "dns_zone" {
+#   count               = var.create_dns_zone ? 1 : 0
+#   name                = var.dns_zone
+#   resource_group_name = data.azurerm_resource_group.existing_rg.name
+# }
 
 # Reference existing DNS zone if not creating a new one
 data "azurerm_dns_zone" "existing_domain" {
-  count               = var.create_dns_zone ? 0 : 1
+#  count               = var.create_dns_zone ? 0 : 1
   name                = var.dns_zone
   resource_group_name = data.azurerm_resource_group.existing_rg.name
 }
@@ -168,7 +168,8 @@ data "azurerm_dns_zone" "existing_domain" {
 # Create DNS A record using the public IP address
 resource "azurerm_dns_a_record" "devops_org" {
   name                = var.dns_record_name
-  zone_name           = var.create_dns_zone ? azurerm_dns_zone.dns_zone[0].name : data.azurerm_dns_zone.existing_domain[0].name
+  zone_name           = data.azurerm_dns_zone.existing_domain.name
+#  zone_name           = var.create_dns_zone ? azurerm_dns_zone.dns_zone[0].name : data.azurerm_dns_zone.existing_domain[0].name
   resource_group_name = data.azurerm_resource_group.existing_rg.name
   ttl                 = 300
   records             = [azurerm_public_ip.publicip.ip_address]
