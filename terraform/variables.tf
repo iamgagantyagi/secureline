@@ -9,14 +9,14 @@ variable "resource_group_name" {
 variable "network_security_group" {
   description = "Name of the existing network security group"
   type        = string
-  default     = "Secureline"
+  default     = "SecurelineNsg"
 }
 
 
 variable "location" {
   description = "Azure region to deploy resources"
   type        = string
-  default     = "eastus"
+  default     = "centralindia"
 }
 
 variable "vnet_name" {
@@ -63,31 +63,41 @@ variable "ssh_private_key" {
 
 variable "dns_zone" {
   description = "Name of the DNS zone"
+  type        = string
   default     = "demodomain.co"
 }
+
+variable "create_dns_zone" {
+  description = "Whether to create a new DNS zone or use an existing one"
+  type        = bool
+  default     = false
+}
+
+variable "dns_record_name" {
+  description = "DNS A Record name"
+  type        = string
+  default     = "securelineArecord"
+}
+
 
 variable "client_id" {
   description = "client id"
   type        = string
-  default     = "f5e28e71-12d7-4b50-a739-51c144dab286"
 }
 
 variable "tenant_id" {
   description = "tenant id"
   type        = string
-  default     = "563161ec-473b-4181-a08e-186bb8ba4131"
 }
 
 variable "subscription_id" {
   description = "subscription id"
   type        = string
-  default     = "ec95ae66-f5f6-429b-b0f6-1212513218a9"
 }
 
 variable "client_secret" {
   description = "client secret"
   type        = string
-  default     = "J1A8Q~T6jP~8G8sekr939lwNN4EQW~1MIp3lxcGt"
 }
 
 variable "azurerm_user_assigned_identity" {
@@ -99,7 +109,7 @@ variable "azurerm_user_assigned_identity" {
 variable "storage_account_name" {
   description = "Size of the virtual machine"
   type        = string
-  default     = "securelinestorage"
+  default     = "securelinestorage" 
 }
 
 variable "container_name" {

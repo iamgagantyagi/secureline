@@ -6,13 +6,13 @@
 trigger:
   branches:
     include:
-      - master
+      - main
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-22.04'
 
 variables:
-- group: secureline-secret
+- group: secureline-secrets
 - name: TerraformConfigPath
   value: 'terraform'
   
@@ -48,7 +48,11 @@ stages:
               # Only apply if changes were detected (exit code 2)
               if [ $PLAN_EXIT_CODE -eq 2 ]; then
                 echo "Changes detected, applying..."
-                terraform apply -auto-approve tfplan
+                terraform apply -auto-approve tfplan \
+                  -var="client_id=$(clientid)" \
+                  -var="tenant_id=$(tenantid)" \
+                  -var="subscription_id=$(subscriptionid)" \
+                  -var="client_secret=$(clientsecret)"
               else
                 echo "No changes detected. Skipping apply."
               fi

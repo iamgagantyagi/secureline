@@ -1,11 +1,11 @@
+# main.tf
 
-# Configure the Azure provider
+# Configure the Azure provider with service principal authentication
 provider "azurerm" {
-  subscription_id = "ec95ae66-f5f6-429b-b0f6-1212513218a9"
-  #client_id       = "your_client_id"
-  #client_secret   = "your_client_secret"
-  #tenant_id       = "563161ec-473b-4181-a08e-186bb8ba4131"
-  
+  subscription_id = var.subscription_id
+  client_id       = var.client_id
+  client_secret   = var.client_secret
+  tenant_id       = var.tenant_id
   
   features {}
 }
@@ -14,24 +14,56 @@ data "azurerm_resource_group" "existing_rg" {
   name = var.resource_group_name
 }
 
-data "azurerm_network_security_group" "existing_nsg" {
-  name = var.network_security_group
+# Create a new Network Security Group
+resource "azurerm_network_security_group" "nsg" {
+  name                = var.network_security_group
+  location            = var.location
   resource_group_name = data.azurerm_resource_group.existing_rg.name
 
+  # SSH access
+  security_rule {
+    name                       = "SSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  # HTTP access
+  security_rule {
+    name                       = "HTTP"
+    priority                   = 1002
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  # HTTPS access
+  security_rule {
+    name                       = "HTTPS"
+    priority                   = 1003
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
-
-data "azurerm_user_assigned_identity" "example" {
-  name                = var.azurerm_user_assigned_identity
-  resource_group_name = data.azurerm_resource_group.existing_rg.name
-}
-
-
 
 # Create a virtual network
 resource "azurerm_virtual_network" "vnet" {
   name                = var.vnet_name
   address_space       = ["10.0.0.0/16"]
-  #location            = data.azurerm_resource_group.existing_rg.location
   location            = var.location
   resource_group_name = data.azurerm_resource_group.existing_rg.name
 }
@@ -42,21 +74,17 @@ resource "azurerm_subnet" "subnet" {
   resource_group_name  = data.azurerm_resource_group.existing_rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
-
 }
 
 resource "azurerm_subnet_network_security_group_association" "networknsg" {
   subnet_id                 = azurerm_subnet.subnet.id
-  network_security_group_id = data.azurerm_network_security_group.existing_nsg.id
-#  resource_group_name  = data.azurerm_resource_group.existing_rg.nam
-
+  network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
 # Create a public IP address
 resource "azurerm_public_ip" "publicip" {
   name                = "${var.vm_name}-publicip"
-  #location            = data.azurerm_resource_group.existing_rg.location
-  location             = var.location
+  location            = var.location
   resource_group_name = data.azurerm_resource_group.existing_rg.name
   allocation_method   = "Static"
   sku                 = "Standard"
@@ -65,7 +93,6 @@ resource "azurerm_public_ip" "publicip" {
 # Create a network interface
 resource "azurerm_network_interface" "nic" {
   name                = "${var.vm_name}-nic"
-  #location            = data.azurerm_resource_group.existing_rg.location
   location            = var.location
   resource_group_name = data.azurerm_resource_group.existing_rg.name
 
@@ -80,7 +107,6 @@ resource "azurerm_network_interface" "nic" {
 # Create an Ubuntu virtual machine
 resource "azurerm_linux_virtual_machine" "vm" {
   name                  = var.vm_name
-  #location              = data.azurerm_resource_group.existing_rg.location
   location              = var.location
   resource_group_name   = data.azurerm_resource_group.existing_rg.name
   user_data             = base64encode(templatefile("${path.module}/userdata.sh.tpl", { public_ip = azurerm_public_ip.publicip.ip_address }))
@@ -91,7 +117,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
     name                 = "${var.vm_name}-osdisk"
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
-    disk_size_gb = 70
+    disk_size_gb         = 70
   }
 
   source_image_reference {
@@ -108,12 +134,10 @@ resource "azurerm_linux_virtual_machine" "vm" {
   admin_ssh_key {
     username   = var.admin_username
     public_key = file(var.ssh_public_key)
-  }  
+  }
 
-  identity {
-    type = "UserAssigned"
-    identity_ids = [data.azurerm_user_assigned_identity.example.id]
-  } 
+  # Removing the managed identity section
+  
   depends_on = [azurerm_public_ip.publicip]
 }
 
@@ -127,76 +151,70 @@ resource "time_sleep" "wait_for_vm" {
   create_duration = "600s"
 }
 
-data "azurerm_dns_zone" "existing_domain" {
-  name = var.dns_zone
+# Create DNS zone if needed
+resource "azurerm_dns_zone" "dns_zone" {
+  count               = var.create_dns_zone ? 1 : 0
+  name                = var.dns_zone
+  resource_group_name = data.azurerm_resource_group.existing_rg.name
 }
-# Create DNS zone
-#resource "azurerm_dns_zone" "example" {
- # name                = var.dns_zone
- # resource_group_name   = data.azurerm_resource_group.existing_rg.name
-#}
+
+# Reference existing DNS zone if not creating a new one
+data "azurerm_dns_zone" "existing_domain" {
+  count               = var.create_dns_zone ? 0 : 1
+  name                = var.dns_zone
+  resource_group_name = data.azurerm_resource_group.existing_rg.name
+}
 
 # Create DNS A record using the public IP address
 resource "azurerm_dns_a_record" "devops_org" {
-  name                = "securelineArecord"
-  zone_name           = data.azurerm_dns_zone.existing_domain.name
-  resource_group_name   = data.azurerm_resource_group.existing_rg.name
+  name                = var.dns_record_name
+  zone_name           = var.create_dns_zone ? azurerm_dns_zone.dns_zone[0].name : data.azurerm_dns_zone.existing_domain[0].name
+  resource_group_name = data.azurerm_resource_group.existing_rg.name
   ttl                 = 300
-  records             = [azurerm_public_ip.publicip.ip_address]  # Use the obtained public IP address
+  records             = [azurerm_public_ip.publicip.ip_address]
 }
 
 resource "null_resource" "vm_provisioner" {
   depends_on = [azurerm_linux_virtual_machine.vm, azurerm_public_ip.publicip, time_sleep.wait_for_vm]
-    connection {
-      type        = "ssh"
-      user        = var.admin_username
-      private_key = file(var.ssh_private_key)
-      host        = azurerm_public_ip.publicip.ip_address
-    }
-  provisioner "file" {
-  source      = "./defectdojo.yaml"  # Local path on your Windows machine
-  destination = "/home/ubuntu/defectdojo.yaml"   # Destination on the remote machine
-}    
-  provisioner "file" {
-  source      = "./setup.sh"  # Local path on your Windows machine
-  destination = "/home/ubuntu/setup.sh"     # Destination on the remote machine
-}  
-  provisioner "file" {
-  source      = "./dd.py"  # Local path on your Windows machine
-  destination = "/home/ubuntu/dd.py"     # Destination on the remote machine
-}  
-  provisioner "file" {
-  source      = "./values.yaml"  # Local path on your Windows machine
-  destination = "/home/ubuntu/values.yaml"     # Destination on the remote machine
-}  
-  provisioner "file" { 
-    source = "./docker-compose.yml"
-    destination = "/home/ubuntu/docker-compose.yml"
-}
-  provisioner "remote-exec" {
-    inline = [
-    # "export ARM_CLIENT_ID=${var.client_id}",
-    # "export ARM_CLIENT_SECRET=${var.client_secret}",
-    # "export ARM_TENANT_ID=${var.tenant_id}",
-    # "export ARM_SUBSCRIPTION_ID=${var.subscription_id}",
-    # "az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID",
-    # "echo 'Setting subscription...'",
-    # #"az account set --subscription $ARM_SUBSCRIPTION_ID",
-    # "echo 'Current subscription:'",
-    # "az account show",
-    "echo 'Copying files to remote host...'",
-    "ls -l /home/ubuntu/",
-    "echo 'Files copied successfully.'",
-    "sudo apt-get install dos2unix", 
-    "dos2unix /home/ubuntu/dd.py",
-    "dos2unix /home/ubuntu/defectdojo.yaml",
-    "dos2unix /home/ubuntu/values.yaml",
-    "dos2unix /home/ubuntu/docker-compose.yml",
-    "export PUBLIC_IP=${azurerm_public_ip.publicip.ip_address}",
-    "chmod +x /home/ubuntu/setup.sh",
-    "dos2unix /home/ubuntu/setup.sh",
-    "/home/ubuntu/setup.sh"
-  ]
+  
+  connection {
+    type        = "ssh"
+    user        = var.admin_username
+    private_key = file(var.ssh_private_key)
+    host        = azurerm_public_ip.publicip.ip_address
   }
   
+  provisioner "file" {
+    source      = "./setup.sh"
+    destination = "/home/ubuntu/setup.sh"
+  }
+  
+  provisioner "file" {
+    source      = "./sonarqubevalues.yaml"
+    destination = "/home/ubuntu/sonarqubevalues.yaml"
+  }
+  
+  provisioner "file" { 
+    source      = "./docker-compose.yml"
+    destination = "/home/ubuntu/docker-compose.yml"
+  }
+  
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'Copying files to remote host...'",
+      "ls -l /home/ubuntu/",
+      "echo 'Files copied successfully.'",
+      "sudo apt-get install dos2unix",
+      "dos2unix /home/ubuntu/sonarqubevalues.yaml",
+      "dos2unix /home/ubuntu/docker-compose.yml",
+      "export PUBLIC_IP=${azurerm_public_ip.publicip.ip_address}",
+      "export CLIENT_ID=${var.client_id}",
+      "export CLIENT_SECRET=${var.client_secret}",
+      "export TENANT_ID=${var.tenant_id}",
+      "export SUBSCRIPTION_ID=${var.subscription_id}",
+      "chmod +x /home/ubuntu/setup.sh",
+      "dos2unix /home/ubuntu/setup.sh",
+      "/home/ubuntu/setup.sh"
+    ]
+  }
 }

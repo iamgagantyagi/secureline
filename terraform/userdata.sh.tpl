@@ -82,15 +82,6 @@ sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.6/docker
 sudo chmod +x /usr/local/bin/docker-compose
 
 
-# Install Chrome and Selenium in the background
-(
-  echo "Installing Chrome and Selenium"
-  pip install selenium --quiet
-  wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-  sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get -f install -y
-  rm google-chrome-stable_current_amd64.deb
-) &
-
 # Initialize Kubernetes
 echo "Initializing Kubernetes master"
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --control-plane-endpoint securelinearecord.demodomain.co:6443 --v=5

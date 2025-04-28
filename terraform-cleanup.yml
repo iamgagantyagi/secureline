@@ -5,7 +5,7 @@ pool:
   vmImage: 'ubuntu-22.04'
 
 variables:
-- group: secureline-secret
+- group: secureline-secrets
 - name: TerraformConfigPath
   value: 'terraform'
 
