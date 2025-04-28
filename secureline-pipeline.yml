@@ -142,7 +142,7 @@ stages:
                 wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.1.0.4889-linux-x64.zip
                 unzip sonar-scanner-cli-7.1.0.4889-linux-x64.zip
                 rm -rf sonar-scanner-cli-7.1.0.4889-linux-x64.zip
-                sudo mv sonar-scanner-cli-7.1.0.4889-linux-x64 /opt/sonar-scanner
+                sudo mv sonar-scanner-7.1.0.4889-linux-x64 /opt/sonar-scanner
                 chmod -R 775 /opt/sonar-scanner
               fi
             displayName: 'Install SAST dependencies'
