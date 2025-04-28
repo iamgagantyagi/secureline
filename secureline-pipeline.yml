@@ -233,7 +233,7 @@ stages:
                 echo "trivy is already installed, skipping installation"
               else
                 cd /home/ubuntu/
-                mkdir trivy_outputs
+                mkdir trivy_results
                 echo "Installing Trivy"
                 curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/.local/bin v0.54.1
                 echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
