@@ -39,8 +39,12 @@ stages:
               cd $(TerraformConfigPath)
               terraform init
 
-              # Run plan with detailed exit code
-              terraform plan -out=tfplan -detailed-exitcode
+              # Run plan with detailed exit code and variables
+              terraform plan -out=tfplan -detailed-exitcode \
+                -var="client_id=$(clientid)" \
+                -var="tenant_id=$(tenantid)" \
+                -var="subscription_id=$(subscriptionid)" \
+                -var="client_secret=$(clientsecret)"
 
               # Store the exit code
               PLAN_EXIT_CODE=$?
@@ -48,11 +52,7 @@ stages:
               # Only apply if changes were detected (exit code 2)
               if [ $PLAN_EXIT_CODE -eq 2 ]; then
                 echo "Changes detected, applying..."
-                terraform apply -auto-approve tfplan \
-                  -var="client_id=$(clientid)" \
-                  -var="tenant_id=$(tenantid)" \
-                  -var="subscription_id=$(subscriptionid)" \
-                  -var="client_secret=$(clientsecret)"
+                terraform apply -auto-approve tfplan
               else
                 echo "No changes detected. Skipping apply."
               fi
