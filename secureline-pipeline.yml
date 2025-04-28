@@ -420,7 +420,7 @@ stages:
                 source ~/.bashrc
                 cd /opt
                 sudo rm -rf UBUNTU22-CIS-Audit
-                wget https://github.com/iamgagantyagi/secureline/UBUNTU22-CIS-Audit.zip
+                wget https://github.com/iamgagantyagi/secureline/blob/main/UBUNTU22-CIS-Audit.zip
                 unzip -o UBUNTU22-CIS-Audit.zip
                 sudo rm -rf UBUNTU22-CIS-Audit.zip
                 chmod -R 775 UBUNTU22-CIS-Audit/run_audit.sh
