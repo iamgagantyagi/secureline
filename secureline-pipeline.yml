@@ -108,7 +108,7 @@ stages:
               export PATH=/home/ubuntu/dependency-check/bin:$PATH
               echo "Started scanning to detect publicly disclosed vulnerabilities contained within project's dependencies"          
               git clone https://github.com/iamgagantyagi/WebGoat.git $HOME/WebGoat
-              dependency-check.sh -o '/home/ubuntu/dependency-check-results/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint  --nvdApiKey 1cb1cca6-5a69-4fe9-bcc4-f1e146faf6a3
+              dependency-check.sh -o '/home/ubuntu/dependency-check-results/' -s '/home/ubuntu/WebGoat' -f 'ALL' --prettyPrint --disableAssembly --nvdApiKey 1cb1cca6-5a69-4fe9-bcc4-f1e146faf6a3
               echo "Scanning completed."
             displayName: 'Run Dependency Check'  
           - task: AzureCLI@2
@@ -674,7 +674,7 @@ stages:
                 else
                   echo "Setting up PostgreSQL container..."
                   sudo chmod -R 755 /home/ubuntu/securelineparser/setup_postgres_parser.sh
-                  sudo ./setup_postgres_parser.sh
+                  sudo DB_HOST="$DB_HOST" DB_USER="$DB_USER" DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" ./setup_postgres_parser.sh
                 fi
                 # Get current date in YYYYMMDD format
                 CURRENT_DATE=$(date +"%Y%m%d")
@@ -755,13 +755,14 @@ stages:
                 export GRAFANA_USER="$(GrafanaUser)"
                 export GRAFANA_PASSWORD="$(GrafanaPassword)"
                 export domain="$(Domain)"
+                cd /home/ubuntu/securelineparser
                 # Check if Grafana container is already running
                 if docker ps | grep -q grafana-container; then
                   echo "Grafana container is already running, skipping installation"
                 else
                   echo "Setting up Grafana container..."
                   sudo chmod -R 755 /home/ubuntu/securelineparser/setup_grafana.sh
-                  sudo ./setup_grafana.sh
+                  sudo GRAFANA_USER="$GRAFANA_USER" GRAFANA_PASSWORD="$GRAFANA_PASSWORD" domain="$domain" ./setup_grafana.sh
                 fi
             displayName: 'Setup Grafana with PostgreSQL data source and dashboards'
               

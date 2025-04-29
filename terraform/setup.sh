@@ -81,7 +81,7 @@ sed -i "s/\$sonarqubepassword/$sonarqubepassword/g; s/\$postgresqlPassword/$sona
 echo "Deploying SonarQube"
 
 # Setup Helm repositories
-helm repo add sonarqube https://SonarSource.github.io/helm-chart-sonarqube &
+helm repo add sonarqube https://SonarSource.github.io/helm-chart-sonarqube 
 wait
 helm repo update
 
