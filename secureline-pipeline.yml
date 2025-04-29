@@ -671,7 +671,13 @@ stages:
                 # Check if postgres container is already running
                 if docker ps | grep -q postgres-container; then
                   echo "PostgreSQL container is already running, skipping installation"
-                else
+                else   
+                  # Update config.json with environment variables
+                  echo "Updating config.json with database connection parameters"
+                  sed -i 's/"host": *"[^"]*"/"host": "'"$DB_HOST"'"/' config.json
+                  sed -i 's/"user": *"[^"]*"/"user": "'"$DB_USER"'"/' config.json
+                  sed -i 's/"password": *"[^"]*"/"password": "'"$DB_PASSWORD"'"/' config.json
+                  sed -i 's/"dbname": *"[^"]*"/"dbname": "'"$DB_NAME"'"/' config.json
                   echo "Setting up PostgreSQL container..."
                   sudo chmod -R 755 /home/ubuntu/securelineparser/setup_postgres_parser.sh
                   sudo DB_HOST="$DB_HOST" DB_USER="$DB_USER" DB_PASSWORD="$DB_PASSWORD" DB_NAME="$DB_NAME" ./setup_postgres_parser.sh
