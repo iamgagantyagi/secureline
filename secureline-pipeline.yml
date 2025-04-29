@@ -420,9 +420,9 @@ stages:
                 source ~/.bashrc
                 cd /opt
                 sudo rm -rf UBUNTU22-CIS-Audit
-                sudo wget https://github.com/iamgagantyagi/secureline/blob/main/UBUNTU22-CIS-Audit.zip
-                sudo unzip -o UBUNTU22-CIS-Audit.zip
-                sudo rm -rf UBUNTU22-CIS-Audit.zip
+                sudo wget https://github.com/iamgagantyagi/secureline/blob/main/UBUNTU22-CIS-Audit.tar
+                sudo tar -xf UBUNTU22-CIS-Audit.tar
+                sudo rm -rf UBUNTU22-CIS-Audit.tar
                 sudo chmod -R 775 UBUNTU22-CIS-Audit/run_audit.sh
               fi
             displayName: 'Install Source Composition Analysis dependencies'
