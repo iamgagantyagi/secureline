@@ -420,10 +420,12 @@ stages:
                 source ~/.bashrc
                 cd /opt
                 sudo rm -rf UBUNTU22-CIS-Audit
-                sudo wget https://github.com/iamgagantyagi/secureline/blob/main/UBUNTU22-CIS-Audit.tar
-                sudo tar -xf UBUNTU22-CIS-Audit.tar
-                sudo rm -rf UBUNTU22-CIS-Audit.tar
-                sudo chmod -R 775 UBUNTU22-CIS-Audit/run_audit.sh
+                sudo git clone https://github.com/ansible-lockdown/UBUNTU22-CIS-Audit.git -b benchmark-v2.0.0
+                cd UBUNTU22-CIS-Audit
+                sudo grep -q '^ubtu22cis_config_aide:' vars/CIS.yml || echo 'ubtu22cis_config_aide: true' | sudo tee -a vars/CIS.yml > /dev/null
+                if ! grep -q '^ubtu22cis_time_pool:' CIS.yml; then
+                  echo -e '\nubtu22cis_time_pool:\n  - name: time.nist.gov' | sudo tee -a vars/CIS.yml > /dev/null
+                fi
               fi
             displayName: 'Install Source Composition Analysis dependencies'
           - script: |
