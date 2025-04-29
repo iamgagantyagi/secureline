@@ -54,28 +54,7 @@ stages:
             displayName: 'Check out source code'
           - script: echo "Build ID is $(myBuildId)"
             displayName: 'Print Build ID'
-          
-          - task: AzureCLI@2
-            inputs:
-              azureSubscription: 'secureline'
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                # Make Key Vault secrets available as environment variables for the script
-                export GRAFANA_USER="$(GrafanaUser)"
-                export GRAFANA_PASSWORD="$(GrafanaPassword)"
-                export domain="$(Domain)"
-                cd /home/ubuntu/securelineparser
-                # Check if Grafana container is already running
-                if docker ps | grep -q grafana-container; then
-                  echo "Grafana container is already running, skipping installation"
-                else
-                  echo "Setting up Grafana container..."
-                  sudo chmod -R 755 /home/ubuntu/securelineparser/setup_grafana.sh
-                  sudo GRAFANA_USER="$GRAFANA_USER" GRAFANA_PASSWORD="$GRAFANA_PASSWORD" domain="$domain" ./setup_grafana.sh
-                fi
-            displayName: 'Setup Grafana with PostgreSQL data source and dashboards'
-
+        
   - stage: SecretsScanner
     dependsOn: Initialize
     jobs:
