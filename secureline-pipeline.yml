@@ -666,7 +666,7 @@ stages:
                 export DB_HOST="$(Domain)"
                 export DB_USER="$(PostgresUser)"
                 export DB_PASSWORD="$(PostgresPassword)"
-                export DB_NAME="$(PostgresDBName)
+                export DB_NAME="$(PostgresDBName)"
                 cd /home/ubuntu/securelineparser
                 # Check if postgres container is already running
                 if docker ps | grep -q postgres-container; then
