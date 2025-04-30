@@ -30,6 +30,10 @@ stages:
               az account set --subscription $(subscriptionid)
               cd $(TerraformConfigPath)
               terraform init
-              terraform destroy -auto-approve
+              terraform destroy -auto-approve \
+                -var="client_id=$(clientid)" \
+                -var="client_secret=$(clientsecret)" \
+                -var="tenant_id=$(tenantid)" \
+                -var="subscription_id=$(subscriptionid)"
             displayName: 'Destroy Terraform Resources'
   
