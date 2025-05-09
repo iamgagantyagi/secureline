@@ -696,7 +696,7 @@ stages:
                 # Run CI scans with CI scan name
                 python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Trufflehog3 Scan" -p "securelinescanoutput/truffelhog_output.json" 
                 python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Dependency Check Scan" -p "securelinescanoutput/dependency-check-report.xml" 
-                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "sonarqube" -u "http://$(Domain):30000" -k securityproject -b main -a "$(sonartoken)" 
+                python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "sonarqube" -u "http://$(Domain):30000" -k securityproject -b main -a "$(Sonarqubeusertoken)" 
                 python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "TrivyMisconfig" -p "securelinescanoutput/Trivy_Misconfig_result.json"
                 python3 run_parser.py -m $(GitHubRepoName) -A "WebGoat" -B $(GitHubBranch) -bn "$CI_SCAN_NAME" -t "Trivy scan" -p "securelinescanoutput/Trivy_result.json" 
 

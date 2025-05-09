@@ -231,3 +231,112 @@ resource "null_resource" "vm_provisioner" {
     ]
   }
 }
+
+
+
+# # Create a bastion subnet if needed for secure access
+# resource "azurerm_subnet" "bastion_subnet" {
+#   name                 = "AzureBastionSubnet" # This name is required by Azure
+#   resource_group_name  = data.azurerm_resource_group.existing_rg.name
+#   virtual_network_name = azurerm_virtual_network.vnet.name
+#   address_prefixes     = ["10.0.2.0/27"] # Bastion requires at least a /27 subnet
+# }
+
+# # Optional: Create a Bastion Host for secure access
+# resource "azurerm_public_ip" "bastion_ip" {
+#   name                = "bastion-ip"
+#   location            = var.location
+#   resource_group_name = data.azurerm_resource_group.existing_rg.name
+#   allocation_method   = "Static"
+#   sku                 = "Standard"
+# }
+
+# resource "azurerm_bastion_host" "bastion" {
+#   name                = "vm-bastion"
+#   location            = var.location
+#   resource_group_name = data.azurerm_resource_group.existing_rg.name
+
+#   ip_configuration {
+#     name                 = "configuration"
+#     subnet_id            = azurerm_subnet.bastion_subnet.id
+#     public_ip_address_id = azurerm_public_ip.bastion_ip.id
+#   }
+# }
+
+# # Create a network interface with static private IP
+# resource "azurerm_network_interface" "nic" {
+#   name                = "${var.vm_name}-nic"
+#   location            = var.location
+#   resource_group_name = data.azurerm_resource_group.existing_rg.name
+
+#   ip_configuration {
+#     name                          = "myNICConfig"
+#     subnet_id                     = azurerm_subnet.subnet.id
+#     private_ip_address_allocation = "Static"
+#     private_ip_address           = var.static_private_ip # Add this variable to specify a static private IP
+#     # Remove the public IP association
+#     # public_ip_address_id          = azurerm_public_ip.publicip.id
+#   }
+# }
+
+# # Create an Ubuntu virtual machine
+# resource "azurerm_linux_virtual_machine" "vm" {
+#   name                  = var.vm_name
+#   location              = var.location
+#   resource_group_name   = data.azurerm_resource_group.existing_rg.name
+#   user_data             = base64encode(templatefile("${path.module}/userdata.sh.tpl", { private_ip = var.static_private_ip }))
+#   network_interface_ids = [azurerm_network_interface.nic.id]
+#   size                  = var.vm_size
+
+#   os_disk {
+#     name                 = "${var.vm_name}-osdisk"
+#     caching              = "ReadWrite"
+#     storage_account_type = "Standard_LRS"
+#     disk_size_gb         = 70
+#   }
+
+#   source_image_reference {
+#     publisher = "Canonical"
+#     offer     = "0001-com-ubuntu-server-jammy"
+#     sku       = "22_04-lts-gen2"
+#     version   = "latest"
+#   }
+
+#   computer_name                   = var.vm_name
+#   admin_username                  = var.admin_username
+#   disable_password_authentication = true
+
+#   admin_ssh_key {
+#     username   = var.admin_username
+#     public_key = file(var.ssh_public_key)
+#   }
+  
+#   # Optionally add a managed identity if needed for Azure services
+#   # identity {
+#   #   type = "SystemAssigned"
+#   # }
+# }
+
+# # Create Private DNS Zone
+# resource "azurerm_private_dns_zone" "private_dns" {
+#   name                = var.private_dns_zone
+#   resource_group_name = data.azurerm_resource_group.existing_rg.name
+# }
+
+# # Link the Private DNS Zone to the VNet
+# resource "azurerm_private_dns_zone_virtual_network_link" "dns_link" {
+#   name                  = "${var.vnet_name}-link"
+#   resource_group_name   = data.azurerm_resource_group.existing_rg.name
+#   private_dns_zone_name = azurerm_private_dns_zone.private_dns.name
+#   virtual_network_id    = azurerm_virtual_network.vnet.id
+#   registration_enabled  = true # Auto-register VMs in the VNet
+# }
+
+# # Create A records for each service in the Private DNS Zone
+# resource "azurerm_private_dns_a_record" "vm_dns" {
+#   name                = var.vm_name
+#   zone_name           = azurerm_private_dns_zone.private_dns.name
+#   resource_group_name = data.azurerm_resource_group.existing_rg.name
+#   ttl                 = 300
+#   records             = [var.static_private_ip]
+# }

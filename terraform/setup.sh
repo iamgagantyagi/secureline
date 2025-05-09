@@ -75,7 +75,7 @@ sudo /home/ubuntu/svc.sh start
 
 # Update configuration files with secrets
 echo "Updating configuration files"
-sed -i "s/\$sonarqubepassword/$sonarqubepassword/g; s/\$postgresqlPassword/$sonarpostgresqlPassword/g; s/\$postgresqlUsername/$sonarpostgresqlUsername/g; s/\$postgresqlDatabase/$sonarpostgresqlDatabase/g" s/\$localhost/$Domain/g; /home/ubuntu/sonarqubevalues.yaml
+sed -i "s/\$sonarqubepassword/$sonarqubepassword/g; s/\$postgresqlPassword/$sonarpostgresqlPassword/g; s/\$postgresqlUsername/$sonarpostgresqlUsername/g; s/\$postgresqlDatabase/$sonarpostgresqlDatabase/g"; /home/ubuntu/sonarqubevalues.yaml
 
 # Install Helm charts in parallel
 echo "Deploying SonarQube"
